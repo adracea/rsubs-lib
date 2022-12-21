@@ -1,0 +1,8 @@
+/target
+/*.vtt
+/*.ass
+/*.srt
+/*.ssa
+/.vscode
+/rsubs-lib/target
+/rsubs-lib/tests/fixtures/res*
