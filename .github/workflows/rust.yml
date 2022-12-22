@@ -6,7 +6,6 @@ on:
   pull_request:
     branches: [ "master" ]
   workflow_dispatch:
-    branches: [ "master" ]
 
 env:
   CARGO_TERM_COLOR: always
@@ -23,17 +22,9 @@ jobs:
     - name: Run tests
       run: cargo test --verbose
   publish:
-    if: github.event_name == workflow_dispatch
+    if: github.event_name == "workflow_dispatch"
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
     - name: Publish
       run: cargo publish --verbose
-#    - name: Upload a Build Artifact
-#      uses: actions/upload-artifact@v3.1.1
-#      with:
-#       # Artifact name
-#        name: rslib
-#        path: 
-#
-#        retention-days: 20
