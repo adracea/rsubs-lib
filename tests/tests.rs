@@ -3,7 +3,7 @@
 mod tests {
     #[test]
     fn test_ssa_from_file_to_srt_file() {
-        use rsubs_lib::subs::ssa;
+        use rsubs_lib::ssa;
         let ssafile = ssa::parse("./tests/fixtures/test.ass".to_string()).unwrap();
         ssafile
             .to_srt()
@@ -12,7 +12,7 @@ mod tests {
     }
     #[test]
     fn test_ssa_from_file_to_vtt_file() {
-        use rsubs_lib::subs::ssa;
+        use rsubs_lib::ssa;
         let ssafile = ssa::parse("./tests/fixtures/test.ass".to_string()).unwrap();
         ssafile
             .to_vtt()
@@ -21,7 +21,7 @@ mod tests {
     }
     #[test]
     fn test_ssa_from_file_to_ass_file() {
-        use rsubs_lib::subs::ssa;
+        use rsubs_lib::ssa;
         let ssafile = ssa::parse("./tests/fixtures/test.ass".to_string()).unwrap();
         ssafile
             .to_file("./tests/fixtures/res4.ass".to_string())
@@ -29,7 +29,7 @@ mod tests {
     }
     #[test]
     fn test_srt_from_file_to_ass_file() {
-        use rsubs_lib::subs::srt;
+        use rsubs_lib::srt;
         let ssafile = srt::parse("./tests/fixtures/test.srt".to_string());
         ssafile
             .to_ass()
@@ -38,7 +38,7 @@ mod tests {
     }
     #[test]
     fn test_srt_from_file_to_vtt_file() {
-        use rsubs_lib::subs::srt;
+        use rsubs_lib::srt;
         let ssafile = srt::parse("./tests/fixtures/test.srt".to_string());
         ssafile
             .to_vtt()
@@ -47,7 +47,7 @@ mod tests {
     }
     #[test]
     fn test_ssa_from_file_to_default_file() {
-        use rsubs_lib::subs::ssa::SSAFile;
+        use rsubs_lib::ssa::SSAFile;
         let ssafile = SSAFile::default();
         ssafile
             .to_file("./tests/fixtures/res1.ass".to_string())
@@ -55,7 +55,7 @@ mod tests {
     }
     #[test]
     fn test_ssa_from_text_to_srt_file() {
-        use rsubs_lib::subs::ssa;
+        use rsubs_lib::ssa;
         use std::fs::File;
         use std::io::Read;
         let file_value: &mut String = &mut "".to_string();
@@ -71,7 +71,7 @@ mod tests {
     }
     #[test]
     fn test_srt_from_file_to_srt_file() {
-        use rsubs_lib::subs::srt;
+        use rsubs_lib::srt;
         let srtfile = srt::parse("./tests/fixtures/test.srt".to_string());
         srtfile
             .to_file("./tests/fixtures/res8.srt".to_string())
@@ -79,7 +79,7 @@ mod tests {
     }
     #[test]
     fn test_srt_from_text_to_srt_file() {
-        use rsubs_lib::subs::srt;
+        use rsubs_lib::srt;
         use std::fs::File;
         use std::io::Read;
         let file_value: &mut String = &mut "".to_string();
@@ -94,7 +94,7 @@ mod tests {
     }
     #[test]
     fn test_srt_from_text_to_srt_string() {
-        use rsubs_lib::subs::srt;
+        use rsubs_lib::srt;
         use std::fs::File;
         use std::io::Read;
         let file_valuex: &mut String = &mut "".to_string();
@@ -121,8 +121,8 @@ mod tests {
     }
     #[test]
     fn test_parse_vtt() {
-        use rsubs_lib::subs::vtt;
-        use rsubs_lib::subs::vtt::VTTFile;
+        use rsubs_lib::vtt;
+        use rsubs_lib::vtt::VTTFile;
         use std::fs::File;
         use std::io::Read;
         let file_value: &mut String = &mut "".to_string();
@@ -134,7 +134,7 @@ mod tests {
     }
     #[test]
     fn test_parse_vtt_write_to_vtt() {
-        use rsubs_lib::subs::vtt;
+        use rsubs_lib::vtt;
         use std::fs::File;
         use std::io::Read;
         let file_value: &mut String = &mut "".to_string();
@@ -148,7 +148,7 @@ mod tests {
     }
     #[test]
     fn test_parse_vtt_write_to_ssa() {
-        use rsubs_lib::subs::vtt;
+        use rsubs_lib::vtt;
         use std::fs::File;
         use std::io::Read;
         let file_value: &mut String = &mut "".to_string();
@@ -163,7 +163,7 @@ mod tests {
     }
     #[test]
     fn test_parse_vtt_write_to_srt() {
-        use rsubs_lib::subs::vtt;
+        use rsubs_lib::vtt;
         use std::fs::File;
         use std::io::Read;
         let file_value: &mut String = &mut "".to_string();

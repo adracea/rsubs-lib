@@ -1,6 +1,6 @@
 use super::srt::SRTLine;
 use super::ssa::{SSAEvent, SSAFile, SSAStyle};
-use crate::subs::srt::SRTFile;
+use crate::srt::SRTFile;
 use crate::util::time::time_from_string;
 use crate::util::{color, color::Color, time, time::Time};
 use once_cell::sync::Lazy;
