@@ -78,6 +78,33 @@ mod tests {
             .unwrap();
     }
     #[test]
+    fn test_srt_from_file_to_srt_file2() {
+        use rsubs_lib::srt;
+        srt::parse("./tests/fixtures/test.srt".to_string())
+            .to_vtt()
+            .to_file("./tests/fixtures/res14.srt".to_string())
+            .unwrap();
+    }
+    #[test]
+    fn test_srt_from_file_to_srt_file3() {
+        use rsubs_lib::srt;
+        use std::fs::File;
+        use std::io::Read;
+        srt::parse("./tests/fixtures/test.srt".to_string())
+            .to_vtt()
+            .to_ass()
+            .to_srt()
+            .to_file("./tests/fixtures/res15.srt".to_string())
+            .unwrap();
+        let file_value = srt::parse("./tests/fixtures/test.srt".to_string()).stringify();
+        let file_value2: &mut String = &mut "".to_string();
+        File::open("./tests/fixtures/res15.srt")
+            .expect("WrongFile")
+            .read_to_string(file_value2)
+            .expect("Couldn't write");
+        assert_eq!(file_value, file_value2.to_string());
+    }
+    #[test]
     fn test_srt_from_text_to_srt_file() {
         use rsubs_lib::srt;
         use std::fs::File;
@@ -175,6 +202,18 @@ mod tests {
             .to_srt()
             .to_file("./tests/fixtures/res12.srt".to_string())
             .expect("Ok");
+    }
+    #[test]
+    fn colors_test() {
+        use rsubs_lib::util::color;
+        let a = color::ColorType::SSAColor(rsubs_lib::util::color::WHITE);
+        let b = color::ColorType::SSAColor0A(rsubs_lib::util::color::WHITE);
+        let c = color::ColorType::VTTColor(rsubs_lib::util::color::WHITE);
+        let d = color::ColorType::VTTColor0A(rsubs_lib::util::color::WHITE);
+        assert_eq!("&HFFFFFFFF", a.to_string());
+        assert_eq!("&HFFFFFF", b.to_string());
+        assert_eq!("#FFFFFFFF", c.to_string());
+        assert_eq!("#FFFFFF", d.to_string());
     }
 }
 

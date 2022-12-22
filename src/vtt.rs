@@ -1,6 +1,7 @@
 use super::srt::SRTLine;
 use super::ssa::{SSAEvent, SSAFile, SSAStyle};
 use crate::srt::SRTFile;
+use crate::util::color::ColorType;
 use crate::util::time::time_from_string;
 use crate::util::{color, color::Color, time, time::Time};
 use once_cell::sync::Lazy;
@@ -12,11 +13,11 @@ use std::str::FromStr;
 
 #[derive(Debug, Clone)]
 pub struct VTTStyle {
-    pub color: Color,
+    pub color: ColorType,
     pub font_family: String,
     pub font_size: String,
     pub text_shadow: String,
-    pub background_color: Color,
+    pub background_color: ColorType,
     pub name: Option<String>,
     pub others: HashMap<String, String>,
 }
@@ -25,11 +26,11 @@ pub static OVERRIDE: Lazy<Regex> =
 impl Default for VTTStyle {
     fn default() -> Self {
         VTTStyle {
-            color: color::WHITE,
+            color: ColorType::VTTColor0A(color::WHITE),
             font_family: "\"Trebuchet MS\"".to_string(),
             font_size: "020px".to_string(),
             text_shadow: "#000000ff -2px 0px 2px, #000000ff 0px 2px 2px, #000000ff 0px -2px 2px, #000000ff 2px 0px 2px".to_string(),
-            background_color: color::TRANSPARENT,
+            background_color: ColorType::VTTColor(color::TRANSPARENT),
             name: None,
             others: HashMap::new(),
         }
@@ -108,15 +109,17 @@ pub fn parse(path_or_content: String) -> VTTFile {
             let mut styl = VTTStyle::default();
             for i in line {
                 if i.starts_with("color:") {
-                    styl.color = Color::from_str(
-                        i.split(": ")
-                            .collect::<Vec<&str>>()
-                            .get(1)
-                            .expect("No Color ")
-                            .strip_suffix(';')
-                            .expect("Broken Color"),
-                    )
-                    .expect("Broken Color");
+                    styl.color = ColorType::VTTColor0A(
+                        Color::from_str(
+                            i.split(": ")
+                                .collect::<Vec<&str>>()
+                                .get(1)
+                                .expect("No Color ")
+                                .strip_suffix(';')
+                                .expect("Broken Color"),
+                        )
+                        .expect("Broken Color"),
+                    );
                 } else if i.starts_with("font-family:") {
                     styl.font_family = i
                         .split(": ")
@@ -145,15 +148,17 @@ pub fn parse(path_or_content: String) -> VTTFile {
                         .expect("Broken Font size")
                         .to_string();
                 } else if i.starts_with("background-shadow:") {
-                    styl.background_color = Color::from_str(
-                        i.split(": ")
-                            .collect::<Vec<&str>>()
-                            .get(1)
-                            .expect("No Color ")
-                            .strip_suffix(';')
-                            .expect("Broken Color"),
-                    )
-                    .expect("Broken Color");
+                    styl.background_color = ColorType::VTTColor(
+                        Color::from_str(
+                            i.split(": ")
+                                .collect::<Vec<&str>>()
+                                .get(1)
+                                .expect("No Color ")
+                                .strip_suffix(';')
+                                .expect("Broken Color"),
+                        )
+                        .expect("Broken Color"),
+                    );
                 } else if i.starts_with("::cue(") {
                     styl.name = Some(
                         i.split(&['(', ')'])
@@ -317,7 +322,7 @@ impl VTTFile {
         ssa.events.clear();
         for (_ctr, i) in self.styles.into_iter().enumerate() {
             let styl = SSAStyle {
-                firstcolor: i.color,
+                firstcolor: color::ColorType::SSAColor(i.color.get_color()),
                 fontname: i
                     .font_family
                     .split('\"')
@@ -325,7 +330,7 @@ impl VTTFile {
                     .get(1)
                     .unwrap()
                     .to_string(),
-                backgroundcolor: i.background_color,
+                backgroundcolor: color::ColorType::SSAColor(i.background_color.get_color()),
                 name: i.name.unwrap_or_else(|| "Default".to_string()),
                 fontsize: i
                     .font_size

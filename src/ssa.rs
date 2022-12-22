@@ -22,10 +22,10 @@ pub struct SSAStyle {
     pub name: String,
     pub fontname: String,
     pub fontsize: f32,
-    pub firstcolor: color::Color,
-    pub secondcolor: color::Color,
-    pub outlinecolor: color::Color,
-    pub backgroundcolor: color::Color,
+    pub firstcolor: color::ColorType,
+    pub secondcolor: color::ColorType,
+    pub outlinecolor: color::ColorType,
+    pub backgroundcolor: color::ColorType,
     pub bold: bool,
     pub italic: bool,
     pub unerline: bool,
@@ -52,10 +52,10 @@ impl Default for SSAStyle {
             name: "Default".to_string(),
             fontname: "Trebuchet MS".to_string(),
             fontsize: 25.5,
-            firstcolor: color::WHITET,
-            secondcolor: color::TRANSPARENT,
-            outlinecolor: color::TRANSPARENT,
-            backgroundcolor: color::TRANSPARENT,
+            firstcolor: color::ColorType::SSAColor(color::WHITET),
+            secondcolor: color::ColorType::SSAColor(color::TRANSPARENT),
+            outlinecolor: color::ColorType::SSAColor(color::TRANSPARENT),
+            backgroundcolor: color::ColorType::SSAColor(color::TRANSPARENT),
             bold: false,
             italic: true,
             unerline: true,
@@ -185,11 +185,11 @@ impl SSAFile {
         let mut stylctr = 1;
         for i in self.styles {
             let styl = VTTStyle {
-                color: i.firstcolor,
+                color: color::ColorType::VTTColor0A(i.firstcolor.get_color()),
                 font_family: format!("\"{}\"", i.fontname),
                 name: Some(i.name.replace(' ', "")),
                 font_size: i.fontsize.to_string() + "px",
-                background_color: i.backgroundcolor,
+                background_color: color::ColorType::VTTColor(i.backgroundcolor.get_color()),
                 ..Default::default()
             };
             if stylctr == 1 {
@@ -257,13 +257,13 @@ impl SSAFile {
                 + ","
                 + &i.fontsize.to_string()
                 + ","
-                + &i.firstcolor.fmt_ass()
+                + &i.firstcolor.to_string()
                 + ","
-                + &i.secondcolor.fmt_ass()
+                + &i.secondcolor.to_string()
                 + ","
-                + &i.outlinecolor.fmt_ass()
+                + &i.outlinecolor.to_string()
                 + ","
-                + &i.backgroundcolor.fmt_ass()
+                + &i.backgroundcolor.to_string()
                 + ","
                 + &i.bold
                     .then(|| "0".to_string())
@@ -402,10 +402,18 @@ pub fn parse(path_or_content: String) -> Result<SSAFile, std::io::Error> {
                         .to_string()
                         .parse::<f32>()
                         .expect("msg"),
-                    firstcolor: Color::from_str(l.get(3).expect("missing_name")).expect("msg"),
-                    secondcolor: Color::from_str(l.get(4).expect("missing_name")).expect("msg"),
-                    outlinecolor: Color::from_str(l.get(5).expect("missing_name")).expect("msg"),
-                    backgroundcolor: Color::from_str(l.get(6).expect("missing_name")).expect("msg"),
+                    firstcolor: color::ColorType::SSAColor(
+                        Color::from_str(l.get(3).expect("missing_name")).expect("msg"),
+                    ),
+                    secondcolor: color::ColorType::SSAColor(
+                        Color::from_str(l.get(4).expect("missing_name")).expect("msg"),
+                    ),
+                    outlinecolor: color::ColorType::SSAColor(
+                        Color::from_str(l.get(5).expect("missing_name")).expect("msg"),
+                    ),
+                    backgroundcolor: color::ColorType::SSAColor(
+                        Color::from_str(l.get(6).expect("missing_name")).expect("msg"),
+                    ),
                     bold: l.get(7).expect("missing value") == &"-1",
                     italic: l.get(8).expect("missing value") == &"-1",
                     unerline: l.get(9).expect("missing value") == &"-1",

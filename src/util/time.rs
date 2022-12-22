@@ -1,6 +1,7 @@
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::ops::Add;
+use std::ops::AddAssign;
 use std::ops::Sub;
 use std::result::Result;
 use std::{fmt, ops::Div};
@@ -44,7 +45,6 @@ pub struct Time {
     frames: Option<String>,
     fps: Option<String>,
 }
-
 impl Default for Time {
     fn default() -> Self {
         Time::new(
@@ -240,10 +240,19 @@ impl Time {
 // Add <u32>ms to a `Time` struct
 impl Add<u32> for Time {
     type Output = Time;
-    fn add(self, other: u32) -> Time {
-        let mut t = self;
-        t.add_ms(other);
-        t
+    fn add(mut self, other: u32) -> Time {
+        self.add_ms(other);
+        self
+    }
+}
+impl AddAssign<u32> for Time {
+    fn add_assign(&mut self, other: u32) {
+        self.add_ms(other);
+    }
+}
+impl AddAssign<i32> for Time {
+    fn add_assign(&mut self, other: i32) {
+        self.add_ms(other.try_into().unwrap());
     }
 } // Subtracts <u32>ms to a `Time` struct
 impl Sub<u32> for Time {

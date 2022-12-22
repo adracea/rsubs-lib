@@ -2,7 +2,7 @@ use core::panic;
 use std::error::Error;
 use std::fmt;
 use std::str::FromStr;
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Color {
     pub r: u8,
     pub g: u8,
@@ -186,6 +186,44 @@ impl FromStr for Color {
             }
         } else {
             panic!("No Color Detected")
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ColorType {
+    SSAColor(Color),
+    VTTColor(Color),
+    SSAColor0A(Color),
+    VTTColor0A(Color),
+}
+
+impl ColorType {
+    pub fn get_color(self) -> Color {
+        match self {
+            Self::VTTColor(color) => color,
+            Self::SSAColor(color) => color,
+            Self::SSAColor0A(color) => color,
+            Self::VTTColor0A(color) => color,
+        }
+    }
+}
+
+impl fmt::Display for ColorType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match *self {
+            Self::SSAColor(val) => write!(
+                f,
+                "&H{:0>2X}{:0>2X}{:0>2X}{:0>2X}",
+                val.a, val.b, val.g, val.r
+            ),
+            Self::VTTColor(val) => write!(
+                f,
+                "#{:0>2X}{:0>2X}{:0>2X}{:0>2X}",
+                val.a, val.r, val.g, val.b
+            ),
+            Self::SSAColor0A(val) => write!(f, "&H{:0>2X}{:0>2X}{:0>2X}", val.b, val.g, val.r),
+            Self::VTTColor0A(val) => write!(f, "#{:0>2X}{:0>2X}{:0>2X}", val.r, val.g, val.b),
         }
     }
 }
