@@ -2,32 +2,75 @@ use std::ops::Add;
 use std::ops::AddAssign;
 use std::ops::Sub;
 use std::result::Result;
+use std::str::FromStr;
 use std::{fmt, ops::Div};
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Time {
-    h: String,
-    m: String,
-    s: String,
-    ms: String,
-    frames: String,
-    fps: String,
+    pub h: u32,
+    pub m: u32,
+    pub s: u32,
+    pub ms: u32,
+    pub frames: u32,
+    pub fps: f32,
 }
 impl Default for Time {
     fn default() -> Self {
-        let mut t = Time::new(
-            "00".to_string(),
-            "00".to_string(),
-            "00".to_string(),
-            "0".to_string(),
-            "0".to_string(),
-            "0".to_string(),
-        );
+        let mut t = Time {
+            h: 0,
+            m: 0,
+            s: 0,
+            ms: 0,
+            frames: 0,
+            fps: 0.0,
+        };
         t.derive_frames();
         t
     }
 }
 
+impl FromStr for Time {
+    type Err = std::num::ParseIntError;
+    fn from_str(str: &str) -> Result<Self, <Time as FromStr>::Err> {
+        let mut t = Time::default();
+        let splits = str.split(':').collect::<Vec<&str>>();
+        match splits.len() {
+            2 => {
+                t.h = 0;
+                t.m = splits.first().unwrap_or(&"0").to_string().parse::<u32>()?;
+                let sms = splits
+                    .get(1)
+                    .unwrap_or(&"0.0")
+                    .replace(',', ".")
+                    .trim()
+                    .parse::<f32>()
+                    .unwrap();
+                let fms = format!("{0:.3}", sms);
+                let msf = fms.split('.').collect::<Vec<&str>>();
+                t.s = msf.first().unwrap_or(&"0").to_string().parse::<u32>()?;
+                t.ms = msf.get(1).unwrap_or(&"0").to_string().parse::<u32>()?;
+            }
+            3 => {
+                t.h = splits.first().unwrap_or(&"0").to_string().parse::<u32>()?;
+                t.m = splits.get(1).unwrap_or(&"0").to_string().parse::<u32>()?;
+                let sms = splits
+                    .get(2)
+                    .unwrap_or(&"0.0")
+                    .replace(',', ".")
+                    .trim()
+                    .parse::<f32>()
+                    .unwrap();
+                let fms = format!("{0:.3}", sms);
+                let msf = fms.split('.').collect::<Vec<&str>>();
+                t.s = msf.first().unwrap_or(&"0").to_string().parse::<u32>()?;
+                t.ms = msf.get(1).unwrap_or(&"0").to_string().parse::<u32>()?;
+            }
+            _ => {}
+        }
+
+        Ok(t)
+    }
+}
 pub fn frames_to_ms(frames: u32, fps: f32) -> u32 {
     if frames == 0 || fps == 0.0 {
         0
@@ -42,141 +85,73 @@ pub fn ms_to_frames(ms: u32, fps: f32) -> u32 {
         ((ms as f32) * fps / 1000.0).round() as u32
     }
 }
-pub fn ms_to_time(ms: u32) -> String {
+pub fn ms_to_timestring(ms: u32) -> String {
     let hms = ms.div(3600000);
     let mms = (ms - hms * 3600000).div(60000);
     let sms = (ms - mms * 60000 - hms * 3600000).div(1000);
     let msms = &format!(
-        "{}",
-        ((ms - mms * 60000 - hms * 3600000 - sms * 1000) as f32).div(1000.0)
-    )
-    .split('.')
-    .collect::<Vec<&str>>()
-    .get(1)
-    .or(Some(&"0"))
-    .expect("Should be good")
-    .to_string();
+        "0.{:0>3}",
+        ((ms - mms * 60000 - hms * 3600000 - sms * 1000) as f32)
+    );
+    let mmmms = msms
+        .split('.')
+        .collect::<Vec<&str>>()
+        .get(1)
+        .or(Some(&"0"))
+        .expect("Should be good")
+        .to_string();
     format!("{:0>2}", hms)
         + ":"
         + &format!("{:0>2}", mms)
         + ":"
         + &format!("{:0>2}", sms)
         + "."
-        + msms
-}
-pub fn time_from_string(s: String) -> Time {
-    let mut t = Time::default();
-    let splits = s.split(':').collect::<Vec<&str>>();
-    match splits.len() {
-        2 => {
-            t.h = "0".to_string();
-            t.m = splits[0].to_string();
-            t.s = splits[1]
-                .to_string()
-                .split(&[',', '.'])
-                .collect::<Vec<&str>>()[0]
-                .to_string();
-            t.ms = splits
-                .get(1)
-                .unwrap_or(&"0")
-                .to_string()
-                .split(&[',', '.'])
-                .collect::<Vec<&str>>()
-                .get(1)
-                .unwrap_or(&"0")
-                .to_string();
-        }
-        3 => {
-            t.h = splits[0].to_string();
-            t.m = splits[1].to_string();
-            t.s = splits[2]
-                .to_string()
-                .split(&[',', '.'])
-                .collect::<Vec<&str>>()[0]
-                .to_string();
-            t.ms = splits
-                .get(2)
-                .unwrap_or(&"0")
-                .to_string()
-                .split(&[',', '.'])
-                .collect::<Vec<&str>>()
-                .get(1)
-                .unwrap_or(&"0")
-                .to_string();
-        }
-        _ => {}
-    }
-
-    t
+        + &format!("{:0>3}", mmmms)
 }
 
 impl std::error::Error for Time {}
 impl Time {
-    pub fn new(h: String, m: String, s: String, ms: String, frames: String, fps: String) -> Time {
-        Time {
-            h,
-            m,
-            s,
-            ms,
-            frames,
-            fps,
-        }
-    }
     pub fn total_ms(&self) -> u32 {
-        self.h.parse::<u32>().expect("Not an int") * 3600000
-            + self.m.parse::<u32>().expect("Not an int") * 60000
-            + self.s.parse::<u32>().expect("Not an int") * 1000
-            + self.ms.parse::<u32>().expect("Not an int")
+        self.h * 3600000 + self.m * 60000 + self.s * 1000 + self.ms
     }
-    pub fn update_from_fps_frames(&mut self) {
-        let t = time_from_string(ms_to_time(frames_to_ms(self.frames(), self.fps())));
+    pub fn update_from_fps_frames(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        let t = Time::from_str(&ms_to_timestring(frames_to_ms(self.frames, self.fps)))?;
         self.h = t.h;
         self.m = t.m;
         self.s = t.s;
         self.ms = t.ms;
-    }
-    pub fn timestamp_to_ms(&self) -> u32 {
-        (self.h.parse::<u32>().expect("Not an int") * 3600000)
-            + (self.m.parse::<u32>().expect("Not an int") * 60000)
-            + ((self.s.to_string() + "." + &self.ms)
-                .parse::<f32>()
-                .expect("Not an int")
-                * 1000.0)
-                .round() as u32
+        Ok(())
     }
     pub fn derive_frames(&mut self) {
-        self.frames = ms_to_frames(self.timestamp_to_ms(), self.fps()).to_string();
-    }
-    pub fn frames(&self) -> u32 {
-        self.frames.clone().parse::<u32>().expect("msg")
-    }
-    pub fn fps(&self) -> f32 {
-        self.fps.clone().parse::<f32>().expect("msg")
+        self.frames = ms_to_frames(self.total_ms(), self.fps);
     }
     pub fn set_fps(&mut self, fps: f32) {
-        self.fps = fps.to_string();
+        self.fps = fps;
         self.derive_frames();
     }
-    pub fn update_from_ms(&mut self, ms: u32) {
-        let t = time_from_string(ms_to_time(ms));
+    pub fn update_from_ms(&mut self, ms: u32) -> Result<(), Box<dyn std::error::Error>> {
+        let t = Time::from_str(&ms_to_timestring(ms))?;
         self.h = t.h;
         self.m = t.m;
         self.s = t.s;
         self.ms = t.ms;
         self.derive_frames();
+        Ok(())
     }
 
     // Adds <u32>ms to `self` and updates.
-    pub fn add_ms(&mut self, ms: u32) {
-        self.update_from_ms(self.total_ms() + ms)
+    pub fn add_ms(&mut self, ms: u32) -> Result<(), Box<dyn std::error::Error>> {
+        self.update_from_ms(self.total_ms() + ms)?;
+        Ok(())
     }
     // Subtracts <u32>ms from `self` and updates. Panics if total ms < 0
     pub fn sub_ms(&mut self, ms: u32) -> Result<(), &mut Time> {
         if ms > self.total_ms() {
-            self.update_from_ms(self.total_ms() - self.total_ms());
+            self.update_from_ms(self.total_ms() - self.total_ms())
+                .unwrap();
             Err(self)
         } else {
-            self.update_from_ms(self.total_ms() - ms);
+            self.update_from_ms(self.total_ms() - ms).unwrap();
             Ok(())
         }
     }
@@ -188,7 +163,7 @@ impl Time {
     }
     pub fn to_srt_string(self) -> String {
         format!(
-            "{:0>2}:{:0>2}:{:0>2},{:0<3}",
+            "{:0>2}:{:0>2}:{:0>2},{:0>3}",
             self.h, self.m, self.s, self.ms
         )
     }
@@ -197,18 +172,18 @@ impl Time {
 impl Add<u32> for Time {
     type Output = Time;
     fn add(mut self, other: u32) -> Time {
-        self.add_ms(other);
+        self.add_ms(other).unwrap();
         self
     }
 }
 impl AddAssign<u32> for Time {
     fn add_assign(&mut self, other: u32) {
-        self.add_ms(other);
+        self.add_ms(other).unwrap();
     }
 }
 impl AddAssign<i32> for Time {
     fn add_assign(&mut self, other: i32) {
-        self.add_ms(other.try_into().unwrap());
+        self.add_ms(other.try_into().unwrap()).unwrap();
     }
 } // Subtracts <u32>ms to a `Time` struct
 impl Sub<u32> for Time {
@@ -238,7 +213,7 @@ impl Sub<i32> for &mut Time {
 impl Add<i32> for Time {
     type Output = Self;
     fn add(mut self, other: i32) -> Self {
-        self.add_ms(other.try_into().unwrap());
+        self.add_ms(other.try_into().unwrap()).unwrap();
         self
     }
 }
@@ -246,7 +221,7 @@ impl Add<i32> for Time {
 impl Add<i32> for &mut Time {
     type Output = Self;
     fn add(self, other: i32) -> Self {
-        self.add_ms(other as u32);
+        self.add_ms(other as u32).unwrap();
         self
     }
 }
@@ -254,7 +229,7 @@ impl fmt::Display for Time {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "{:0>2}:{:0>2}:{:0>2}.{:0<3}",
+            "{:0>2}:{:0>2}:{:0>2}.{:0>3}",
             self.h, self.m, self.s, self.ms
         )
     }

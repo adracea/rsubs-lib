@@ -76,21 +76,6 @@ impl Default for Color {
     }
 }
 
-impl Color {
-    pub fn new(r: u8, g: u8, b: u8, a: u8) -> Color {
-        Color { r, g, b, a }
-    }
-    pub fn fmt_ass(&self) -> String {
-        format!(
-            "&H{:0>2X}{:0>2X}{:0>2X}{:0>2X}",
-            self.a, self.b, self.g, self.r
-        )
-    }
-    pub fn fmt_ssa(&self) -> String {
-        format!("&H{:0>2X}{:0>2X}{:0>2X}", self.b, self.g, self.r)
-    }
-}
-
 impl FromStr for Color {
     type Err = std::num::ParseIntError;
     fn from_str(str: &str) -> Result<Self, <Color as FromStr>::Err> {

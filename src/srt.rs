@@ -1,19 +1,20 @@
-use crate::util::time::{self, Time};
+use crate::util::time::Time;
 use std::fs::File;
 use std::io::Read;
 use std::io::Write;
 use std::str;
+use std::str::FromStr;
 
 use super::ssa::{SSAEvent, SSAFile};
 use super::vtt::VTTFile;
 use super::vtt::VTTLine;
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct SRTFile {
     pub lines: Vec<SRTLine>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SRTLine {
     pub line_number: i32,
     pub line_text: String,
@@ -118,8 +119,8 @@ pub fn parse(path_or_content: String) -> SRTFile {
                 .expect("Failed to parse times line")
                 .split(" --> ");
             (subline.line_start, subline.line_end) = (
-                time::time_from_string(timesplit.next().unwrap().to_string()),
-                time::time_from_string(timesplit.next().unwrap().to_string()),
+                Time::from_str(timesplit.next().unwrap()).unwrap(),
+                Time::from_str(timesplit.next().unwrap()).unwrap(),
             );
             subline.line_text = subsplit
                 .get(2..)

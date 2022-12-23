@@ -2,8 +2,7 @@ use super::srt::SRTLine;
 use super::ssa::{SSAEvent, SSAFile, SSAStyle};
 use crate::srt::SRTFile;
 use crate::util::color::ColorType;
-use crate::util::time::time_from_string;
-use crate::util::{color, color::Color, time, time::Time};
+use crate::util::{color, color::Color, time::Time};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::collections::HashMap;
@@ -50,8 +49,8 @@ impl Default for VTTLine {
         VTTLine {
             line_number: "0".to_string(),
             style: Some("Default".to_string()),
-            line_start: time_from_string("00:00:00.000".to_string()),
-            line_end: time_from_string("00:00:02.000".to_string()),
+            line_start: Time::from_str("00:00:00.000").unwrap(),
+            line_end: Time::from_str("00:00:02.000").unwrap(),
             position: Some(VTTPos::default()),
             line_text: "Lorem Ipsum".to_string(),
         }
@@ -205,8 +204,8 @@ pub fn parse(path_or_content: String) -> VTTFile {
                     .expect("Failed to parse times line")
                     .split(" --> ");
                 (subline.line_start, subline.line_end) = (
-                    time::time_from_string(timesplit.next().unwrap().to_string()),
-                    time::time_from_string(
+                    Time::from_str(timesplit.next().unwrap()).unwrap(),
+                    Time::from_str(
                         timesplit
                             .next()
                             .unwrap()
@@ -214,9 +213,9 @@ pub fn parse(path_or_content: String) -> VTTFile {
                             .splitn(2, ' ')
                             .collect::<Vec<&str>>()
                             .first()
-                            .unwrap()
-                            .to_string(),
-                    ),
+                            .unwrap(),
+                    )
+                    .unwrap(),
                 );
                 let mut spos = VTTPos::default();
                 let posstring: String = subsplit

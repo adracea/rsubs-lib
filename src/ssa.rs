@@ -8,7 +8,7 @@ use std::{
 
 use crate::util::{
     color::{self, Alignment, Color},
-    time::{time_from_string, Time},
+    time::Time,
 };
 use regex::Regex;
 use std::fs::File;
@@ -16,7 +16,7 @@ use std::fs::File;
 use super::srt::SRTLine;
 use super::{srt::SRTFile, vtt::VTTFile, vtt::VTTLine, vtt::VTTStyle};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SSAStyle {
     pub name: String,
     pub fontname: String,
@@ -96,8 +96,8 @@ impl Default for SSAEvent {
     fn default() -> Self {
         SSAEvent {
             layer: 0,
-            line_start: time_from_string("0:00:00.20".to_string()),
-            line_end: time_from_string("0:00:02.20".to_string()),
+            line_start: Time::from_str("0:00:00.20").unwrap(),
+            line_end: Time::from_str("0:00:02.20").unwrap(),
             style: "Default".to_string(),
             name: "".to_string(),
             lmargin: 0.0,
@@ -110,10 +110,7 @@ impl Default for SSAEvent {
     }
 }
 
-// pub static OVERRIDE: Lazy<Regex> =
-//     Lazy::new(|| Regex::new(r"\{[^}]*\}").expect("Timestamp regex failure"));
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SSAFile {
     pub events: Vec<SSAEvent>,
     pub styles: Vec<SSAStyle>,
@@ -507,8 +504,8 @@ pub fn parse(path_or_content: String) -> Result<SSAFile, std::io::Error> {
                         .unwrap()
                         .parse::<i32>()
                         .expect("Failed to parse layer");
-                    ev.line_start = time_from_string(line.get(1).unwrap().to_string());
-                    ev.line_end = time_from_string(line.get(2).unwrap().to_string());
+                    ev.line_start = Time::from_str(line.get(1).unwrap()).unwrap();
+                    ev.line_end = Time::from_str(line.get(2).unwrap()).unwrap();
                     ev.style = line.get(3).unwrap().to_string();
                     ev.name = line.get(4).unwrap().to_string();
                     ev.lmargin = line

@@ -189,46 +189,57 @@ You know I’m so excited my glasses are falling off here.
     #[test]
     fn test_time_2() {
         use rsubs_lib::util::time;
-        let timestr = vec!["00:00:20.000", "0:00:05,10", "00:20,40"];
+        let timestr = vec!["00:00:20.000", "00:01:20.011", "0:00:05,100", "00:20,40"];
         for (ctr, i) in timestr.iter().enumerate() {
             match ctr {
                 0 => assert_eq!(
-                    Time::new(
-                        "00".to_string(),
-                        "00".to_string(),
-                        "20".to_string(),
-                        "000".to_string(),
-                        "0".to_string(),
-                        "0".to_string(),
-                    ),
-                    time::time_from_string(i.to_string())
+                    Time {
+                        h: 0,
+                        m: 0,
+                        s: 20,
+                        ms: 0,
+                        frames: 0,
+                        fps: 0.0,
+                    },
+                    Time::from_str(i).unwrap()
                 ),
                 1 => assert_eq!(
-                    Time::new(
-                        "0".to_string(),
-                        "00".to_string(),
-                        "05".to_string(),
-                        "10".to_string(),
-                        "0".to_string(),
-                        "0".to_string(),
-                    ),
-                    time::time_from_string(i.to_string())
+                    Time {
+                        h: 0,
+                        m: 1,
+                        s: 20,
+                        ms: 11,
+                        frames: 0,
+                        fps: 0.0,
+                    },
+                    Time::from_str(i).unwrap()
                 ),
                 2 => assert_eq!(
-                    Time::new(
-                        "0".to_string(),
-                        "00".to_string(),
-                        "20".to_string(),
-                        "40".to_string(),
-                        "0".to_string(),
-                        "0".to_string(),
-                    ),
-                    time::time_from_string(i.to_string())
+                    Time {
+                        h: 0,
+                        m: 0,
+                        s: 5,
+                        ms: 100,
+                        frames: 0,
+                        fps: 0.0,
+                    },
+                    Time::from_str(i).unwrap()
+                ),
+                3 => assert_eq!(
+                    Time {
+                        h: 0,
+                        m: 0,
+                        s: 20,
+                        ms: 400,
+                        frames: 0,
+                        fps: 0.0,
+                    },
+                    Time::from_str(i).unwrap()
                 ),
                 _ => todo!(),
             }
         }
-        let mut tr = time::time_from_string(timestr.first().unwrap().to_string());
+        let mut tr = Time::from_str(timestr.first().unwrap()).unwrap();
         assert_eq!(((tr.clone() + 1000_u32) as Time).total_ms(), 21000_u32);
         assert_eq!(((tr.clone() - 1000_u32) as Time).total_ms(), 19000_u32);
         assert_eq!(((tr.clone() + 1000_i32) as Time).total_ms(), 21000);
@@ -238,17 +249,18 @@ You know I’m so excited my glasses are falling off here.
         tr += 1000_i32;
         assert_eq!(tr.total_ms(), 22000_u32);
         let a: &mut Time = &mut tr;
-        let b = a + 10;
+        let b = a + 100;
         let mut d: &mut Time = &mut Time::default();
-        assert_eq!(b.clone().to_srt_string(), "00:00:22,010".to_string());
+        println!("{}", b);
+        assert_eq!(b.clone().to_srt_string(), "00:00:22,100".to_string());
         assert_eq!(b - 100000, d);
         d.set_fps(27.9);
-        assert_eq!(d.fps(), 27.9);
-        assert_eq!(d.frames(), 0);
+        assert_eq!(d.fps, 27.9);
+        assert_eq!(d.frames, 0);
         d = d + 10000;
         d.derive_frames();
-        assert_eq!(d.frames(), 279);
-        d.update_from_fps_frames();
+        assert_eq!(d.frames, 279);
+        d.update_from_fps_frames().unwrap();
         assert_eq!(time::frames_to_ms(23, 0.0), 0);
     }
 
@@ -412,11 +424,6 @@ You know I’m so excited my glasses are falling off here.
         assert_eq!(b.get_color(), color::WHITE);
         assert_eq!(c.get_color(), color::WHITE);
         assert_eq!(d.get_color(), color::WHITE);
-        let f = color::Color::new(255, 255, 255, 255);
-        assert_eq!(f, e);
-        let g = color::Color::new(12, 234, 234, 255);
-        assert_eq!(g.fmt_ssa(), "&HEAEA0C".to_string());
-        assert_eq!(g.fmt_ass(), "&HFFEAEA0C".to_string());
         let mut h = Color::from_str("&HAA").unwrap();
         assert_eq!(
             h,
