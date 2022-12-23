@@ -4,7 +4,7 @@
 ![clippy](https://github.com/adracea/rsubs-lib/actions/workflows/rust-clippy.yml/badge.svg)
 [![Crates.io](https://img.shields.io/crates/v/rsubs-lib.svg)](https://crates.io/crates/rsubs-lib)
 [![Crates.io](https://img.shields.io/docsrs/rsubs-lib)](https://docs.rs/rsubs-lib)
-
+![CodeCoverage](https://img.shields.io/codecov/c/github/adracea/rsubs-lib)
 
 A rust library for converting and changing subtitles
 Currently a work in progress but it should be able to produce usable .srt,.vtt and .ssa/ass files from one another.
