@@ -253,7 +253,8 @@ You know I’m so excited my glasses are falling off here.
         let mut d: &mut Time = &mut Time::default();
         println!("{}", b);
         assert_eq!(b.clone().to_srt_string(), "00:00:22,100".to_string());
-        assert_eq!(b - 100000, d);
+        assert_eq!(&mut b.clone() - 100000, d);
+        assert_eq!(b - 100000_u32, d);
         d.set_fps(27.9);
         assert_eq!(d.fps, 27.9);
         assert_eq!(d.frames, 0);

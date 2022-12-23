@@ -9,12 +9,12 @@ use super::ssa::{SSAEvent, SSAFile};
 use super::vtt::VTTFile;
 use super::vtt::VTTLine;
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, Eq)]
 pub struct SRTFile {
     pub lines: Vec<SRTLine>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SRTLine {
     pub line_number: i32,
     pub line_text: String,

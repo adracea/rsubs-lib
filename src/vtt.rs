@@ -10,7 +10,7 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::str::FromStr;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VTTStyle {
     pub color: ColorType,
     pub font_family: String,
@@ -35,7 +35,7 @@ impl Default for VTTStyle {
         }
     }
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VTTLine {
     pub line_number: String,
     pub style: Option<String>,
@@ -56,7 +56,7 @@ impl Default for VTTLine {
         }
     }
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VTTPos {
     pub pos: i32,
     pub size: i32,
@@ -73,7 +73,7 @@ impl Default for VTTPos {
         }
     }
 }
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VTTFile {
     pub styles: Vec<VTTStyle>,
     pub lines: Vec<VTTLine>,

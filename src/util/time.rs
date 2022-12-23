@@ -14,6 +14,7 @@ pub struct Time {
     pub frames: u32,
     pub fps: f32,
 }
+impl Eq for Time {}
 impl Default for Time {
     fn default() -> Self {
         let mut t = Time {
@@ -185,7 +186,8 @@ impl AddAssign<i32> for Time {
     fn add_assign(&mut self, other: i32) {
         self.add_ms(other.try_into().unwrap()).unwrap();
     }
-} // Subtracts <u32>ms to a `Time` struct
+}
+// Subtracts <u32>ms to a `Time` struct
 impl Sub<u32> for Time {
     type Output = Self;
     fn sub(mut self, other: u32) -> Self {
@@ -209,6 +211,13 @@ impl Sub<i32> for &mut Time {
         self
     }
 }
+impl Sub<u32> for &mut Time {
+    type Output = Self;
+    fn sub(self, other: u32) -> Self {
+        self.sub_ms(other).expect_err("Negative time");
+        self
+    }
+}
 // Add <i32>ms to a `Time` struct
 impl Add<i32> for Time {
     type Output = Self;
@@ -225,6 +234,7 @@ impl Add<i32> for &mut Time {
         self
     }
 }
+// Displays the time as `hh:mm:ss.mss`
 impl fmt::Display for Time {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(

@@ -16,7 +16,7 @@ use std::fs::File;
 use super::srt::SRTLine;
 use super::{srt::SRTFile, vtt::VTTFile, vtt::VTTLine, vtt::VTTStyle};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SSAStyle {
     pub name: String,
     pub fontname: String,
@@ -44,7 +44,7 @@ pub struct SSAStyle {
     pub encoding: i32,
     pub drawing: bool,
 }
-
+impl Eq for SSAStyle {}
 impl Default for SSAStyle {
     fn default() -> Self {
         SSAStyle {
@@ -77,7 +77,7 @@ impl Default for SSAStyle {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SSAEvent {
     pub layer: i32,
     pub line_start: Time,
@@ -91,7 +91,7 @@ pub struct SSAEvent {
     pub linetype: String,
     pub line_text: String,
 }
-
+impl Eq for SSAEvent {}
 impl Default for SSAEvent {
     fn default() -> Self {
         SSAEvent {
@@ -110,7 +110,7 @@ impl Default for SSAEvent {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SSAFile {
     pub events: Vec<SSAEvent>,
     pub styles: Vec<SSAStyle>,
@@ -126,7 +126,7 @@ impl Default for SSAFile {
         default_info.insert("ScriptType".to_string(), "V4.00+".to_string());
         default_info.insert("Collisions".to_string(), "Normal".to_string());
         default_info.insert("WrapStyle".to_string(), "0".to_string());
-        // default_info.insert("ScaledBorderAndShadows".to_string(), "yes".to_string());
+        default_info.insert("ScaledBorderAndShadows".to_string(), "yes".to_string());
         default_info.insert("PlayResX".to_string(), "640".to_string());
         default_info.insert("PlayResY".to_string(), "480".to_string());
         SSAFile {
@@ -384,7 +384,6 @@ pub fn parse(path_or_content: String) -> Result<SSAFile, std::io::Error> {
                     values2.get(i).unwrap().split(',').collect::<Vec<&str>>(),
                 );
             }
-            // for _ in (&style.clone().get(&"Format".to_string()).unwrap()).into_iter() {}
             for (k, l) in style.clone().into_iter() {
                 if k == *"Format" {
                     continue;
@@ -478,6 +477,7 @@ pub fn parse(path_or_content: String) -> Result<SSAFile, std::io::Error> {
             }
         }
         if i.contains("[Script Info]") {
+            sub.info.clear();
             for j in i.split("\r\n").collect::<Vec<&str>>().iter() {
                 let line = j.split_once(':').unwrap_or(("", ""));
                 sub.info
