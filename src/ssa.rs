@@ -10,7 +10,6 @@ use crate::util::{
     color::{self, Alignment, Color},
     time::{time_from_string, Time},
 };
-use once_cell::sync::Lazy;
 use regex::Regex;
 use std::fs::File;
 
@@ -111,8 +110,8 @@ impl Default for SSAEvent {
     }
 }
 
-pub static OVERRIDE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"\{[^}]*\}").expect("Timestamp regex failure"));
+// pub static OVERRIDE: Lazy<Regex> =
+//     Lazy::new(|| Regex::new(r"\{[^}]*\}").expect("Timestamp regex failure"));
 
 #[derive(Debug)]
 pub struct SSAFile {
@@ -130,7 +129,7 @@ impl Default for SSAFile {
         default_info.insert("ScriptType".to_string(), "V4.00+".to_string());
         default_info.insert("Collisions".to_string(), "Normal".to_string());
         default_info.insert("WrapStyle".to_string(), "0".to_string());
-        default_info.insert("ScaledBorderAndShadows".to_string(), "yes".to_string());
+        // default_info.insert("ScaledBorderAndShadows".to_string(), "yes".to_string());
         default_info.insert("PlayResX".to_string(), "640".to_string());
         default_info.insert("PlayResY".to_string(), "480".to_string());
         SSAFile {
@@ -240,8 +239,8 @@ impl SSAFile {
     }
     pub fn to_file(self, path: String) -> std::io::Result<()> {
         let mut w = File::options()
-            .write(true)
             .create(true)
+            .write(true)
             .open(path)
             .expect("File can't be created");
         let mut str = "[Script Info]\r\n".to_string();

@@ -91,9 +91,11 @@ impl SRTFile {
 pub fn parse(path_or_content: String) -> SRTFile {
     let mut b: String = "".to_string();
     let mut sub: SRTFile = SRTFile::default();
-    if std::fs::read(&path_or_content).is_ok() {
-        let mut f = File::open(path_or_content).expect("Couldn't open file");
-        f.read_to_string(&mut b).expect("Couldn't read file");
+    if !path_or_content.contains("\r\n") {
+        if std::fs::read(&path_or_content).is_ok() {
+            let mut f = File::open(path_or_content).expect("Couldn't open file");
+            f.read_to_string(&mut b).expect("Couldn't read file");
+        }
     } else {
         b = path_or_content;
     }

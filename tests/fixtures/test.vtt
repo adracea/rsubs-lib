@@ -6,12 +6,16 @@ STYLE
 ::cue(Default){
 color: #ffffff;
 font-family: "Arial", sans-serif;
+font-size: 12px;
 }
 
 STYLE
 ::cue(Default2){
 color: #ffffff;
 font-family: "Arial", sans-serif;
+background-color: #00000000;
+font-size: 020px;
+text-shadow: #000000ff -2px 0px 2px, #000000ff 0px 2px 2px, #000000ff 0px -2px 2px, #000000ff 2px 0px 2px;
 }
 
 STYLE
@@ -40,6 +44,7 @@ font-family: "Arial", sans-serif;
 00:20.000 --> 00:22.000
 <v Roger Bingham>Astrophysicist, Director of the Hayden Planetarium
 
+aa
 00:22.000 --> 00:24.000
 <v Roger Bingham>at the AMNH.
 
@@ -49,10 +54,10 @@ font-family: "Arial", sans-serif;
 00:27.000 --> 00:30.000
 <v Roger Bingham>And I want to do a follow-up on the last conversation we did.
 
-00:30.000 --> 00:31.500 align:right size:50%
+00:30.000 --> 00:31.500 align:right size:50% line:12
 <v Roger Bingham>When we e-mailed—
 
-00:30.500 --> 00:32.500 align:left size:50%
+00:30.500 --> 00:32.500 align:left size:50% position:030%
 <v Neil deGrasse Tyson>Didn’t we talk about enough in that conversation?
 <v Neil deGrasse Tyson>Didn’t we talk about enough in that conversation?
 <v Neil deGrasse Tyson>Didn’t we talk about enough in that conversation?

@@ -147,7 +147,7 @@ pub fn parse(path_or_content: String) -> VTTFile {
                         .strip_suffix(';')
                         .expect("Broken Font size")
                         .to_string();
-                } else if i.starts_with("background-shadow:") {
+                } else if i.starts_with("background-color:") {
                     styl.background_color = ColorType::VTTColor(
                         Color::from_str(
                             i.split(": ")
@@ -298,7 +298,7 @@ impl VTTFile {
         for (i, j) in self.lines.iter().enumerate() {
             let mut line_block: String = "".to_string();
             if j.line_number.is_empty() {
-                line_block += &(i.to_string() + "\r\n")
+                line_block += &((i + 1).to_string() + "\r\n")
             } else {
                 line_block += &(j.line_number.to_string() + "\r\n")
             }
@@ -367,7 +367,7 @@ impl VTTFile {
         srt.lines.clear();
         for (ctr, i) in self.lines.into_iter().enumerate() {
             let mut line = SRTLine {
-                line_number: i.line_number.parse::<i32>().unwrap_or(ctr as i32),
+                line_number: i.line_number.parse::<i32>().unwrap_or(ctr as i32 + 1),
                 line_end: i.line_end,
                 line_start: i.line_start,
                 line_text: i.line_text.clone(),

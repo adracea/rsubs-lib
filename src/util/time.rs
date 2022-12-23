@@ -1,40 +1,8 @@
-use once_cell::sync::Lazy;
-use regex::Regex;
 use std::ops::Add;
 use std::ops::AddAssign;
 use std::ops::Sub;
 use std::result::Result;
 use std::{fmt, ops::Div};
-
-pub static TIMESTAMP: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(\d{1,2}):(\d{1,2}):(\d{1,2})[.,](\d{1,3})").expect("Timestamp regex failure")
-});
-
-pub static TIMESTAMP_SHORT: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"(\d{1,2}):(\d{2}):(\d{2})").expect("Short timestamp regex failure"));
-pub fn make_time(
-    h: Option<String>,
-    m: Option<String>,
-    s: Option<String>,
-    ms: Option<String>,
-    frames: Option<String>,
-    fps: Option<String>,
-) -> Time {
-    let h2 = h.unwrap_or_else(|| "0".to_string());
-    let m2 = m.unwrap_or_else(|| "0".to_string());
-    let s2 = s.unwrap_or_else(|| "0".to_string());
-    let ms2 = ms.unwrap_or_else(|| "0".to_string());
-    let f2 = frames.or_else(|| Some("0".to_string()));
-    let fs2 = fps.or_else(|| Some("0".to_string()));
-    Time {
-        h: h2,
-        m: m2,
-        s: s2,
-        ms: ms2,
-        frames: f2,
-        fps: fs2,
-    }
-}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Time {
@@ -42,19 +10,21 @@ pub struct Time {
     m: String,
     s: String,
     ms: String,
-    frames: Option<String>,
-    fps: Option<String>,
+    frames: String,
+    fps: String,
 }
 impl Default for Time {
     fn default() -> Self {
-        Time::new(
-            0.to_string(),
-            0.to_string(),
-            0.to_string(),
-            0.to_string(),
-            None,
-            None,
-        )
+        let mut t = Time::new(
+            "00".to_string(),
+            "00".to_string(),
+            "00".to_string(),
+            "0".to_string(),
+            "0".to_string(),
+            "0".to_string(),
+        );
+        t.derive_frames();
+        t
     }
 }
 
@@ -141,16 +111,8 @@ pub fn time_from_string(s: String) -> Time {
 }
 
 impl std::error::Error for Time {}
-
 impl Time {
-    pub fn new(
-        h: String,
-        m: String,
-        s: String,
-        ms: String,
-        frames: Option<String>,
-        fps: Option<String>,
-    ) -> Time {
+    pub fn new(h: String, m: String, s: String, ms: String, frames: String, fps: String) -> Time {
         Time {
             h,
             m,
@@ -183,24 +145,17 @@ impl Time {
                 .round() as u32
     }
     pub fn derive_frames(&mut self) {
-        self.frames = Some(ms_to_frames(self.timestamp_to_ms(), self.fps()).to_string());
+        self.frames = ms_to_frames(self.timestamp_to_ms(), self.fps()).to_string();
     }
     pub fn frames(&self) -> u32 {
-        self.frames
-            .clone()
-            .unwrap_or_else(|| "0".to_string())
-            .parse::<u32>()
-            .expect("msg")
+        self.frames.clone().parse::<u32>().expect("msg")
     }
     pub fn fps(&self) -> f32 {
-        self.fps
-            .clone()
-            .unwrap_or_else(|| "0".to_string())
-            .parse::<f32>()
-            .expect("msg")
+        self.fps.clone().parse::<f32>().expect("msg")
     }
     pub fn set_fps(&mut self, fps: f32) {
-        self.fps = Some(fps.to_string());
+        self.fps = fps.to_string();
+        self.derive_frames();
     }
     pub fn update_from_ms(&mut self, ms: u32) {
         let t = time_from_string(ms_to_time(ms));
@@ -218,6 +173,7 @@ impl Time {
     // Subtracts <u32>ms from `self` and updates. Panics if total ms < 0
     pub fn sub_ms(&mut self, ms: u32) -> Result<(), &mut Time> {
         if ms > self.total_ms() {
+            self.update_from_ms(self.total_ms() - self.total_ms());
             Err(self)
         } else {
             self.update_from_ms(self.total_ms() - ms);
@@ -256,28 +212,42 @@ impl AddAssign<i32> for Time {
     }
 } // Subtracts <u32>ms to a `Time` struct
 impl Sub<u32> for Time {
-    type Output = Time;
-    fn sub(self, other: u32) -> Time {
-        let mut t = self;
-        t.sub_ms(other).expect("Negative time");
-        t
+    type Output = Self;
+    fn sub(mut self, other: u32) -> Self {
+        self.sub_ms(other).expect("Negative time");
+        self
     }
 } // Subtracts <i32>ms to a `Time` struct
 impl Sub<i32> for Time {
-    type Output = Time;
-    fn sub(self, other: i32) -> Time {
-        let mut t = self;
-        t.sub_ms(other.try_into().unwrap()).expect("Negative time");
-        t
+    type Output = Self;
+    fn sub(mut self, other: i32) -> Self {
+        self.sub_ms(other.try_into().unwrap())
+            .expect("Negative time");
+        self
+    }
+}
+impl Sub<i32> for &mut Time {
+    type Output = Self;
+    fn sub(self, other: i32) -> Self {
+        self.sub_ms(other.try_into().unwrap())
+            .expect_err("Negative time");
+        self
     }
 }
 // Add <i32>ms to a `Time` struct
 impl Add<i32> for Time {
-    type Output = Time;
-    fn add(self, other: i32) -> Time {
-        let mut t = self;
-        t.add_ms(other.try_into().unwrap());
-        t
+    type Output = Self;
+    fn add(mut self, other: i32) -> Self {
+        self.add_ms(other.try_into().unwrap());
+        self
+    }
+}
+// Add <i32>ms to a `Time` struct
+impl Add<i32> for &mut Time {
+    type Output = Self;
+    fn add(self, other: i32) -> Self {
+        self.add_ms(other as u32);
+        self
     }
 }
 impl fmt::Display for Time {

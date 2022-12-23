@@ -1,6 +1,5 @@
 [Script Info]
 Collisions: Normal
-ScaledBorderAndShadows: yes
 Synch Point: 
 PlayResX: 640
 WrapStyle: 0
@@ -17,8 +16,8 @@ Style: De4,Trebuchet MS,25.5,&H00FFFFFF,&H00000000,&H00000000,&H00000000,-1,0,0,
 
 [Events]
 Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
-Dialogue: 0,0:00:00.20,0:00:02.20,Default,,0000,0000,0000,,Lorem Ipsum1
-Dialogue: 0,0:00:02.20,0:00:04.20,Default,,0000,0000,0000,,Lorem Ipsum2
+Dialogue: 0,0:00:00.20,0:00:02.20,Default,,0000,0000,0000,,{\i1}Lorem Ipsum1{\i0}
+Dialogue: 0,0:00:02.20,0:00:04.20,Default,,0000,0000,0000,,{\c1}Lorem Ipsum2{\c0}
 Dialogue: 0,0:00:06.20,0:00:08.20,Default,,0000,0000,0000,,Lorem Ipsum3
 Dialogue: 0,0:00:08.20,0:00:10.20,Default,,0000,0000,0000,,Lorem Ipsum4
 Dialogue: 0,0:00:12.20,0:00:14.20,Default,,0000,0000,0000,,Lorem Ipsum5

@@ -89,32 +89,6 @@ impl Color {
     pub fn fmt_ssa(&self) -> String {
         format!("&H{:0>2X}{:0>2X}{:0>2X}", self.b, self.g, self.r)
     }
-    pub fn from_ass(str: &str) -> Result<Self, <Color as FromStr>::Err> {
-        if str.len() == 5 {
-            Ok(Color {
-                r: u8::from_str_radix(&str[2..4], 16)?,
-                g: 0,
-                b: 0,
-                a: 255,
-            })
-        } else if str.len() == 7 {
-            Ok(Color {
-                r: u8::from_str_radix(&str[4..6], 16)?,
-                g: u8::from_str_radix(&str[2..4], 16)?,
-                b: 0,
-                a: 255,
-            })
-        } else if str.len() == 9 {
-            Ok(Color {
-                a: u8::from_str_radix(&str[2..4], 16)?,
-                b: u8::from_str_radix(&str[4..6], 16)?,
-                g: u8::from_str_radix(&str[6..8], 16)?,
-                r: u8::from_str_radix(&str[8..10], 16)?,
-            })
-        } else {
-            panic!("bad color")
-        }
-    }
 }
 
 impl FromStr for Color {
@@ -126,14 +100,14 @@ impl FromStr for Color {
                     r: u8::from_str_radix(&str[1..3], 16)?,
                     g: 0,
                     b: 0,
-                    a: 0,
+                    a: 255,
                 })
             } else if str.len() == 5 {
                 Ok(Color {
                     r: u8::from_str_radix(&str[1..3], 16)?,
                     g: u8::from_str_radix(&str[3..5], 16)?,
                     b: 0,
-                    a: 0,
+                    a: 255,
                 })
             } else if str.len() == 7 {
                 Ok(Color {
@@ -144,10 +118,10 @@ impl FromStr for Color {
                 })
             } else if str.len() == 9 {
                 Ok(Color {
-                    r: u8::from_str_radix(&str[1..3], 16)?,
-                    g: u8::from_str_radix(&str[3..5], 16)?,
-                    b: u8::from_str_radix(&str[5..7], 16)?,
-                    a: u8::from_str_radix(&str[7..9], 16)?,
+                    r: u8::from_str_radix(&str[3..5], 16)?,
+                    g: u8::from_str_radix(&str[5..7], 16)?,
+                    b: u8::from_str_radix(&str[7..9], 16)?,
+                    a: u8::from_str_radix(&str[1..3], 16)?,
                 })
             } else {
                 panic!("No Color Detected")
@@ -158,21 +132,21 @@ impl FromStr for Color {
                     r: u8::from_str_radix(&str[2..4], 16)?,
                     g: 0,
                     b: 0,
-                    a: 0,
+                    a: 255,
                 })
             } else if str.len() == 6 {
                 Ok(Color {
                     r: u8::from_str_radix(&str[4..6], 16)?,
                     g: u8::from_str_radix(&str[2..4], 16)?,
                     b: 0,
-                    a: 0,
+                    a: 255,
                 })
             } else if str.len() == 8 {
                 Ok(Color {
-                    a: 0,
-                    b: u8::from_str_radix(&str[4..6], 16)?,
-                    g: u8::from_str_radix(&str[6..8], 16)?,
-                    r: u8::from_str_radix(&str[8..10], 16)?,
+                    a: 255,
+                    b: u8::from_str_radix(&str[2..4], 16)?,
+                    g: u8::from_str_radix(&str[4..6], 16)?,
+                    r: u8::from_str_radix(&str[6..8], 16)?,
                 })
             } else if str.len() == 10 {
                 Ok(Color {
@@ -199,12 +173,12 @@ pub enum ColorType {
 }
 
 impl ColorType {
-    pub fn get_color(self) -> Color {
+    pub fn get_color(&self) -> Color {
         match self {
-            Self::VTTColor(color) => color,
-            Self::SSAColor(color) => color,
-            Self::SSAColor0A(color) => color,
-            Self::VTTColor0A(color) => color,
+            Self::VTTColor(color) => *color,
+            Self::SSAColor(color) => *color,
+            Self::SSAColor0A(color) => *color,
+            Self::VTTColor0A(color) => *color,
         }
     }
 }
@@ -232,12 +206,12 @@ impl fmt::Display for Color {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "#{:0>2x}{:0>2x}{:0>2x}{:0>2x}",
+            "#{:0>2X}{:0>2X}{:0>2X}{:0>2X}",
             self.a, self.r, self.g, self.b
         )
     }
 }
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Alignment {
     BottomLeft = 1,
     BottomCenter = 2,
