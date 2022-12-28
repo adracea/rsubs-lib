@@ -158,8 +158,11 @@ impl Time {
     }
     pub fn to_ass_string(self) -> String {
         format!(
-            "{:0>1}:{:0>2}:{:0>2}.{:.*}",
-            self.h, self.m, self.s, 2, self.ms
+            "{:0>1}:{:0>2}:{:0>2}.{:0>2}",
+            self.h,
+            self.m,
+            self.s,
+            self.ms / 10
         )
     }
     pub fn to_srt_string(self) -> String {

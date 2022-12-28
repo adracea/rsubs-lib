@@ -319,9 +319,19 @@ impl VTTFile {
     pub fn to_ass(self) -> SSAFile {
         let mut ssa = SSAFile::default();
         ssa.events.clear();
+        ssa.styles.clear();
         for (_ctr, i) in self.styles.into_iter().enumerate() {
             let styl = SSAStyle {
-                firstcolor: color::ColorType::SSAColor(i.color.get_color()),
+                firstcolor: if i.color.get_color().a == 255 {
+                    color::ColorType::SSAColor(Color {
+                        r: i.color.get_color().r,
+                        g: i.color.get_color().g,
+                        b: i.color.get_color().b,
+                        a: 0,
+                    })
+                } else {
+                    color::ColorType::SSAColor(i.color.get_color())
+                },
                 fontname: i
                     .font_family
                     .split('\"')
@@ -352,10 +362,7 @@ impl VTTFile {
             let invalid_line_text = OVERRIDE.captures_iter(&i.line_text);
             for k in invalid_line_text {
                 let tag_main = k.get(0).unwrap().as_str();
-                let tag_trigger = k.name("trigger").unwrap().as_str();
-                if !["/b", "b", "/i", "i", "/u", "u"].contains(&tag_trigger) {
-                    line.line_text = line.line_text.clone().replace(tag_main, "");
-                }
+                line.line_text = line.line_text.clone().replace(tag_main, "");
             }
             ssa.events.push(line);
         }
