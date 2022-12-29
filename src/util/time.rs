@@ -194,30 +194,28 @@ impl AddAssign<i32> for Time {
 impl Sub<u32> for Time {
     type Output = Self;
     fn sub(mut self, other: u32) -> Self {
-        self.sub_ms(other).expect("Negative time");
+        self.sub_ms(other).unwrap_or_default();
         self
     }
 } // Subtracts <i32>ms to a `Time` struct
 impl Sub<i32> for Time {
     type Output = Self;
     fn sub(mut self, other: i32) -> Self {
-        self.sub_ms(other.try_into().unwrap())
-            .expect("Negative time");
+        self.sub_ms(other.try_into().unwrap()).unwrap_or_default();
         self
     }
 }
 impl Sub<i32> for &mut Time {
     type Output = Self;
     fn sub(self, other: i32) -> Self {
-        self.sub_ms(other.try_into().unwrap())
-            .expect_err("Negative time");
+        self.sub_ms(other.try_into().unwrap()).unwrap_or_default();
         self
     }
 }
 impl Sub<u32> for &mut Time {
     type Output = Self;
     fn sub(self, other: u32) -> Self {
-        self.sub_ms(other).expect_err("Negative time");
+        self.sub_ms(other).unwrap_or_default();
         self
     }
 }

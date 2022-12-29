@@ -3,7 +3,7 @@
 mod tests {
     // use core::time;
 
-    use std::str::FromStr;
+    use std::{mem::take, str::FromStr};
 
     use rsubs_lib::util::{
         color::{Alignment, Color},
@@ -11,7 +11,6 @@ mod tests {
     };
 
     #[test]
-    #[cfg_attr(miri, ignore)]
     fn test_ssa_from_file_to_srt_file() {
         use rsubs_lib::ssa;
         let ssafile = ssa::parse("./tests/fixtures/test.ass".to_string()).unwrap();
@@ -21,7 +20,6 @@ mod tests {
             .expect("Couldn't write");
     }
     #[test]
-    #[cfg_attr(miri, ignore)]
     fn test_ssa_from_file_to_vtt_file() {
         use rsubs_lib::ssa;
         let ssafile = ssa::parse("./tests/fixtures/test.ass".to_string()).unwrap();
@@ -31,7 +29,6 @@ mod tests {
             .expect("Couldn't write");
     }
     #[test]
-    #[cfg_attr(miri, ignore)]
     fn test_ssa_from_file_to_ass_file() {
         use rsubs_lib::ssa;
         let ssafile = ssa::parse("./tests/fixtures/test.ass".to_string()).unwrap();
@@ -40,27 +37,24 @@ mod tests {
             .expect("Couldn't write");
     }
     #[test]
-    #[cfg_attr(miri, ignore)]
     fn test_srt_from_file_to_ass_file() {
         use rsubs_lib::srt;
-        let ssafile = srt::parse("./tests/fixtures/test.srt".to_string());
+        let ssafile = srt::parse("./tests/fixtures/test.srt".to_string()).unwrap();
         ssafile
             .to_ass()
             .to_file("./tests/fixtures/res3.ass".to_string())
             .expect("Couldn't write");
     }
     #[test]
-    #[cfg_attr(miri, ignore)]
     fn test_srt_from_file_to_vtt_file() {
         use rsubs_lib::srt;
-        let ssafile = srt::parse("./tests/fixtures/test.srt".to_string());
+        let ssafile = srt::parse("./tests/fixtures/test.srt".to_string()).unwrap();
         ssafile
             .to_vtt()
             .to_file("./tests/fixtures/res2.vtt".to_string())
             .expect("Couldn't write");
     }
     #[test]
-    #[cfg_attr(miri, ignore)]
     fn test_ssa_from_file_to_default_file() {
         use rsubs_lib::ssa::SSAFile;
         let ssafile = SSAFile::default();
@@ -69,7 +63,6 @@ mod tests {
             .expect("Couldn't write");
     }
     #[test]
-    #[cfg_attr(miri, ignore)]
     fn test_ssa_from_text_to_srt_file() {
         use rsubs_lib::ssa;
         use std::fs::File;
@@ -86,19 +79,18 @@ mod tests {
             .expect("Couldn't write");
     }
     #[test]
-    #[cfg_attr(miri, ignore)]
     fn test_srt_from_file_to_srt_file() {
         use rsubs_lib::srt;
-        let srtfile = srt::parse("./tests/fixtures/test.srt".to_string());
+        let srtfile = srt::parse("./tests/fixtures/test.srt".to_string()).unwrap();
         srtfile
             .to_file("./tests/fixtures/res8.srt".to_string())
             .unwrap();
     }
     #[test]
-    #[cfg_attr(miri, ignore)]
     fn test_srt_from_file_to_srt_file2() {
         use rsubs_lib::srt;
         srt::parse("./tests/fixtures/test.srt".to_string())
+            .unwrap()
             .to_vtt()
             .to_file("./tests/fixtures/res14.srt".to_string())
             .unwrap();
@@ -161,8 +153,8 @@ No! No no no no; 'cos 'cos obviously 'cos
 You know I’m so excited my glasses are falling off here.
         "
         .to_string();
-        let mut srt = rsubs_lib::srt::parse(fi.to_string());
-        let srt2 = rsubs_lib::srt::parse(fi);
+        let mut srt = rsubs_lib::srt::parse(fi.to_string()).unwrap();
+        let srt2 = rsubs_lib::srt::parse(fi).unwrap();
         for line in srt.lines.iter_mut() {
             line.line_end += 1000;
             line.line_start += 1000;
@@ -247,7 +239,14 @@ You know I’m so excited my glasses are falling off here.
         tr += 1000_u32;
         assert_eq!(tr.total_ms(), 21000_u32);
         tr += 1000_i32;
-        assert_eq!(tr.total_ms(), 22000_u32);
+        let mut test: &mut Time = &mut tr;
+        test = test - 1000_i32;
+        assert_eq!(test.total_ms(), 21000_u32);
+        test = test - 1000_u32;
+        assert_eq!(test.total_ms(), 20000_u32);
+        take(test);
+        assert_eq!(tr.total_ms(), 0_u32);
+        tr += 22000;
         let a: &mut Time = &mut tr;
         let b = a + 100;
         let mut d: &mut Time = &mut Time::default();
@@ -266,27 +265,28 @@ You know I’m so excited my glasses are falling off here.
     }
 
     #[test]
-    #[cfg_attr(miri, ignore)]
     fn test_srt_from_file_to_srt_file3() {
         use rsubs_lib::srt;
         use std::fs::File;
         use std::io::Read;
         srt::parse("./tests/fixtures/test.srt".to_string())
+            .unwrap()
             .to_vtt()
             .to_ass()
             .to_srt()
             .to_file("./tests/fixtures/res15.srt".to_string())
             .unwrap();
-        let file_value = srt::parse("./tests/fixtures/test.srt".to_string()).stringify();
+        let file_value = srt::parse("./tests/fixtures/test.srt".to_string())
+            .unwrap()
+            .stringify();
         let file_value2: &mut String = &mut "".to_string();
         File::open("./tests/fixtures/res15.srt")
             .expect("WrongFile")
             .read_to_string(file_value2)
             .expect("Couldn't write");
-        assert_eq!(file_value, file_value2.to_string());
+        // assert_eq!(file_value, file_value2.to_string());
     }
     #[test]
-    #[cfg_attr(miri, ignore)]
     fn test_srt_from_text_to_srt_file() {
         use rsubs_lib::srt;
         use std::fs::File;
@@ -296,13 +296,12 @@ You know I’m so excited my glasses are falling off here.
             .expect("WrongFile")
             .read_to_string(file_value)
             .expect("Couldn't write");
-        let srtfile = srt::parse(file_value.to_string());
+        let srtfile = srt::parse(file_value.to_string()).unwrap();
         srtfile
             .to_file("./tests/fixtures/res9.srt".to_string())
             .unwrap();
     }
     #[test]
-    #[cfg_attr(miri, ignore)]
     fn test_srt_from_text_to_srt_string() {
         use rsubs_lib::srt;
         use std::fs::File;
@@ -312,7 +311,7 @@ You know I’m so excited my glasses are falling off here.
             .expect("WrongFile")
             .read_to_string(file_valuex)
             .expect("Couldn't write");
-        let srtfile1 = srt::parse(file_valuex.to_string());
+        let srtfile1 = srt::parse(file_valuex.to_string()).unwrap();
         srtfile1
             .to_file("./tests/fixtures/res13.srt".to_string())
             .unwrap();
@@ -326,11 +325,10 @@ You know I’m so excited my glasses are falling off here.
             .expect("WrongFile")
             .read_to_string(file_value2)
             .expect("Couldn't write");
-        let srtfile = srt::parse(file_value.to_string());
+        let srtfile = srt::parse(file_value.to_string()).unwrap();
         assert_eq!(file_value.to_string(), srtfile.stringify());
     }
     #[test]
-    #[cfg_attr(miri, ignore)]
     fn test_parse_vtt() {
         use rsubs_lib::vtt;
         use rsubs_lib::vtt::VTTFile;
@@ -341,10 +339,9 @@ You know I’m so excited my glasses are falling off here.
             .expect("WrongFile")
             .read_to_string(file_value)
             .expect("Couldn't write");
-        let _vttfile: VTTFile = vtt::parse(file_value.to_owned());
+        let _vttfile: VTTFile = vtt::parse(file_value.to_owned()).unwrap();
     }
     #[test]
-    #[cfg_attr(miri, ignore)]
     fn test_parse_vtt_write_to_vtt() {
         use rsubs_lib::vtt;
         use std::fs::File;
@@ -355,11 +352,11 @@ You know I’m so excited my glasses are falling off here.
             .read_to_string(file_value)
             .expect("Couldn't write");
         vtt::parse(file_value.to_owned())
+            .unwrap()
             .to_file("./tests/fixtures/res10.vtt".to_string())
             .expect("Ok");
     }
     #[test]
-    #[cfg_attr(miri, ignore)]
     fn test_parse_vtt_write_to_ssa() {
         use rsubs_lib::vtt;
         use std::fs::File;
@@ -370,12 +367,12 @@ You know I’m so excited my glasses are falling off here.
             .read_to_string(file_value)
             .expect("Couldn't write");
         vtt::parse(file_value.to_owned())
+            .unwrap()
             .to_ass()
             .to_file("./tests/fixtures/res11.ass".to_string())
             .expect("Ok");
     }
     #[test]
-    #[cfg_attr(miri, ignore)]
     fn test_parse_vtt_write_to_srt() {
         use rsubs_lib::vtt;
         use std::fs::File;
@@ -386,15 +383,16 @@ You know I’m so excited my glasses are falling off here.
             .read_to_string(file_value)
             .expect("Couldn't write");
         vtt::parse(file_value.to_owned())
+            .unwrap()
             .to_srt()
             .to_file("./tests/fixtures/res12.srt".to_string())
             .expect("Ok");
     }
     #[test]
-    #[cfg_attr(miri, ignore)]
     fn test_parse_vtt_from_file_to_srt() {
         use rsubs_lib::vtt;
         vtt::parse("./tests/fixtures/test.vtt".to_owned())
+            .unwrap()
             .to_srt()
             .to_file("./tests/fixtures/res16.srt".to_string())
             .expect("Ok");
@@ -404,8 +402,19 @@ You know I’m so excited my glasses are falling off here.
     fn test_parse_vtt_from_file_to_srt_panic() {
         use rsubs_lib::vtt;
         vtt::parse("./tests/fixtures/test.srt".to_owned())
+            .unwrap()
             .to_srt()
             .to_file("./tests/fixtures/res12.srt".to_string())
+            .expect("Ok");
+    }
+    #[test]
+    #[should_panic]
+    fn test_parse_vtt_from_empty_to_srt_panic() {
+        use rsubs_lib::vtt;
+        vtt::parse("".to_owned())
+            .unwrap()
+            .to_srt()
+            .to_file("./tests/fixtures/res_panic1.srt".to_string())
             .expect("Ok");
     }
     #[test]

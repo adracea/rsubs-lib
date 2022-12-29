@@ -87,7 +87,7 @@ impl Default for VTTFile {
     }
 }
 
-pub fn parse(path_or_content: String) -> VTTFile {
+pub fn parse(path_or_content: String) -> Result<VTTFile, std::io::Error> {
     let mut b: String = "".to_string();
     let mut sub: VTTFile = VTTFile::default();
     if std::fs::read(&path_or_content).is_ok() {
@@ -97,8 +97,9 @@ pub fn parse(path_or_content: String) -> VTTFile {
         b = path_or_content;
     }
     let line_blocks = b.split("\r\n\r\n").collect::<Vec<&str>>();
+    // Unwrapping here is safe because the above split will always have `Some(&[""])`.
     if !line_blocks.first().unwrap().contains("WEBVTT") {
-        panic!("File not .VTT")
+        panic!("Not a  WEBVTT file");
     }
     let mut line_found = false;
     let mut styles_found = 0;
@@ -117,7 +118,7 @@ pub fn parse(path_or_content: String) -> VTTFile {
                                 .strip_suffix(';')
                                 .expect("Broken Color"),
                         )
-                        .expect("Broken Color"),
+                        .unwrap_or_default(),
                     );
                 } else if i.starts_with("font-family:") {
                     styl.font_family = i
@@ -156,14 +157,14 @@ pub fn parse(path_or_content: String) -> VTTFile {
                                 .strip_suffix(';')
                                 .expect("Broken Color"),
                         )
-                        .expect("Broken Color"),
+                        .unwrap_or_default(),
                     );
                 } else if i.starts_with("::cue(") {
                     styl.name = Some(
                         i.split(&['(', ')'])
                             .collect::<Vec<&str>>()
                             .get(1)
-                            .expect("Name")
+                            .unwrap_or(&"Name")
                             .to_string(),
                     );
                 }
@@ -267,7 +268,7 @@ pub fn parse(path_or_content: String) -> VTTFile {
             }
         }
     }
-    sub
+    Ok(sub)
 }
 
 impl VTTFile {
@@ -337,7 +338,7 @@ impl VTTFile {
                     .split('\"')
                     .collect::<Vec<&str>>()
                     .get(1)
-                    .unwrap()
+                    .unwrap_or(&"Arial")
                     .to_string(),
                 backgroundcolor: color::ColorType::SSAColor(i.background_color.get_color()),
                 name: i.name.unwrap_or_else(|| "Default".to_string()),
@@ -347,7 +348,7 @@ impl VTTFile {
                     .unwrap_or(&i.font_size.to_string())
                     .to_string()
                     .parse::<f32>()
-                    .expect("Couldn't parse to float"),
+                    .unwrap_or(20.0),
                 ..Default::default()
             };
             ssa.styles.push(styl)

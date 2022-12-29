@@ -89,7 +89,7 @@ impl SRTFile {
     }
 }
 
-pub fn parse(path_or_content: String) -> SRTFile {
+pub fn parse(path_or_content: String) -> Result<SRTFile, std::io::Error> {
     let mut b: String = "".to_string();
     let mut sub: SRTFile = SRTFile::default();
     if !path_or_content.contains("\r\n") {
@@ -130,5 +130,5 @@ pub fn parse(path_or_content: String) -> SRTFile {
             sub.lines.push(subline)
         }
     }
-    sub
+    Ok(sub)
 }

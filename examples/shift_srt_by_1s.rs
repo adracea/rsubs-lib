@@ -2,7 +2,8 @@
 // Afterwards we print the result to stdout.
 
 fn main() {
-    let mut srt = rsubs_lib::srt::parse("tests/fixtures/test.srt".to_string());
+    let mut srt =
+        rsubs_lib::srt::parse("tests/fixtures/test.srt".to_string()).expect("failed parsing");
     for line in srt.lines.iter_mut() {
         line.line_end += 20;
         line.line_start += 50;
