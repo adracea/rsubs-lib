@@ -1,3 +1,8 @@
+//! Implements helpers for `.vtt`.
+//!
+//! It describes the [VTTStyle], [VTTFile] and [VTTLine] structs and
+//! provides the [parse] function.
+
 use super::srt::SRTLine;
 use super::ssa::{SSAEvent, SSAFile, SSAStyle};
 use crate::srt::SRTFile;
@@ -9,6 +14,7 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::str::FromStr;
 
+/// The VTTStyle contains information that generally composes the `::cue` header
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VTTStyle {
     pub color: ColorType,
@@ -33,6 +39,7 @@ impl Default for VTTStyle {
         }
     }
 }
+/// The VTTLine contains information about the line itself as well as the positional information of the line
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VTTLine {
     pub line_number: String,
@@ -54,6 +61,8 @@ impl Default for VTTLine {
         }
     }
 }
+
+/// Describes how the line is positioned on screen. By default it's all 0 with a center alignment.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VTTPos {
     pub pos: i32,
@@ -71,6 +80,8 @@ impl Default for VTTPos {
         }
     }
 }
+
+/// Contains [VTTStyle]s and [VTTLine]s
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VTTFile {
     pub styles: Vec<VTTStyle>,
@@ -85,6 +96,9 @@ impl Default for VTTFile {
     }
 }
 
+/// Parses the given [String] into a [VTTFile]
+///
+/// The string may represent either the path to a file or the file content itself.
 pub fn parse(path_or_content: String) -> Result<VTTFile, std::io::Error> {
     let mut b: String = "".to_string();
     let mut sub: VTTFile = VTTFile::default();
@@ -270,6 +284,7 @@ pub fn parse(path_or_content: String) -> Result<VTTFile, std::io::Error> {
 }
 
 impl VTTFile {
+    /// Takes the path of the file in the form of a [String] to be written to as input.
     pub fn to_file(self, path: String) -> std::io::Result<()> {
         let mut w = File::options()
             .write(true)
@@ -315,6 +330,8 @@ impl VTTFile {
         }
         Ok(())
     }
+
+    /// When converting to SSAFile, information about the VTTStyles is maintained but not applied.
     pub fn to_ass(self) -> SSAFile {
         let mut ssa = SSAFile::default();
         ssa.events.clear();
@@ -363,7 +380,7 @@ impl VTTFile {
         }
         ssa
     }
-
+    /// SRT is basically a VTT without the styles
     pub fn to_srt(self) -> SRTFile {
         let mut srt = SRTFile::default();
         srt.lines.clear();
@@ -381,6 +398,8 @@ impl VTTFile {
     }
 }
 
+/// Replaces strings that are invalid in certain contexts. SSA doesn't support html-like tags
+/// and SRT only support `b`,`i`,`u` representing bold, italics, underline.
 pub fn replace_invalid_lines(str: &str, triggers: bool) -> String {
     let mut res = String::from(str);
     let reg = Regex::new(r"<(?P<trigger>.*?)>").expect("Regex Failure");

@@ -5,3 +5,5 @@
 /*.ssa
 /.vscode
 /tests/fixtures/res*
+/tests/fixtures/doc*
+/tests/fixtures/ex*

@@ -1,3 +1,8 @@
+//! Implements helpers for `.srt`.
+//!
+//! It describes the [SRTFile] and [SRTLine] structs and
+//! provides the [parse] function.
+
 use crate::util::time::Time;
 use std::fs::File;
 use std::io::Read;
@@ -9,11 +14,46 @@ use super::ssa::{SSAEvent, SSAFile};
 use super::vtt::VTTFile;
 use super::vtt::VTTLine;
 
+/// Contains a Vec<[SRTLine]>
+///
+/// The `.srt` format is relatively simple to parse and generally looks like :
+///```text
+/// 0
+/// 00:00:00,000 --> 00:00:02,000
+/// This is my text
+///
+/// 1
+/// 00:00:02,000 --> 00:00:04,000
+/// This is my second text
+/// ```
+///
+/// The [parse] function takes as input a [String] that represents either the parsed file or the path to it.
+///
+/// A simple example of working with this would be the following :
+///
+///
+/// ```
+/// use rsubs_lib::srt::parse;
+///
+/// let mut a = parse("./tests/fixtures/test.srt".to_string()).unwrap();
+/// for line in a.lines.iter_mut(){
+///     line.line_text.push_str(" Ipsum"); // add "Ipsum" to the end of each line.
+/// }
+/// // print the parsed and modified `.srt` file
+/// println!("{}",a.clone().stringify());
+///
+/// // and then write it to a file
+/// a.to_file("./tests/fixtures/doctest1.srt".to_string());
+///
+/// ```
 #[derive(Debug, Clone, PartialEq, Default, Eq)]
 pub struct SRTFile {
     pub lines: Vec<SRTLine>,
 }
 
+/// Describes each line
+///
+/// Each line has a start and end [Time], a [String] text and an [i32] line number.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SRTLine {
     pub line_number: i32,
@@ -33,6 +73,7 @@ impl Default for SRTLine {
 }
 
 impl SRTFile {
+    /// Convert from [SRTFile] to [SSAFile] replacing `\r\n` to `\\N` since SSA/ASS is single line
     pub fn to_ass(self) -> SSAFile {
         let mut ssa = SSAFile::default();
         ssa.events.clear();
@@ -47,6 +88,7 @@ impl SRTFile {
         }
         ssa
     }
+    /// Convert from [SRTFile] to [VTTFile], WebVTT at its core is exactly the same as Subrip
     pub fn to_vtt(self) -> VTTFile {
         let mut vtt = VTTFile::default();
         vtt.lines.clear();
@@ -55,13 +97,14 @@ impl SRTFile {
                 line_number: line.line_number.to_string(),
                 line_start: line.line_start,
                 line_end: line.line_end,
-                line_text: line.line_text.replace("\r\n", "\\N"),
+                line_text: line.line_text,
                 ..Default::default()
             };
             vtt.lines.push(vttline);
         }
         vtt
     }
+    /// Takes the path of the file in the form of a [String] to be written to as input.
     pub fn to_file(self, path: String) -> std::io::Result<()> {
         let mut w = File::options()
             .write(true)
@@ -72,6 +115,7 @@ impl SRTFile {
             .expect("Couldn't write");
         Ok(())
     }
+    /// Consumes self and dumps the file to String.
     pub fn stringify(self) -> String {
         let mut lines = "".to_string();
         for i in self.lines {
@@ -89,6 +133,9 @@ impl SRTFile {
     }
 }
 
+/// Parses the given [String] into a [SRTFile]
+///
+/// The string may represent either the path to a file or the file content itself.
 pub fn parse(path_or_content: String) -> Result<SRTFile, std::io::Error> {
     let mut b: String = "".to_string();
     let mut sub: SRTFile = SRTFile::default();

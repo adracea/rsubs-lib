@@ -1,7 +1,16 @@
+//! This module represents mostly Color related helpers.
+//!
+//! SSA Colors start with `&H` and can be found in multiple forms:
+//!
+//! `&HRR`,`&HGGRR`,`&HBBGGRR` or `&HAABBGGRR`.
+//!
+//! VTT Colors start with `#` and are the usual ARGB or RGB hex formats.
 use core::panic;
 use std::error::Error;
 use std::fmt;
 use std::str::FromStr;
+
+/// Generic ARGB color struct.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Color {
     pub r: u8,
@@ -78,6 +87,7 @@ impl Default for Color {
 
 impl FromStr for Color {
     type Err = std::num::ParseIntError;
+    /// Parses the color from a string depending on the type of color encountered.
     fn from_str(str: &str) -> Result<Self, <Color as FromStr>::Err> {
         if str.starts_with('#') {
             if str.len() == 3 {
@@ -149,6 +159,7 @@ impl FromStr for Color {
     }
 }
 
+/// Used to easily display and move colors between representation types.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ColorType {
     SSAColor(Color),

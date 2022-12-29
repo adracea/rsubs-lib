@@ -1,4 +1,8 @@
-use core::panic;
+//! Implements helpers for `.ass` and `.ssa`.
+//!
+//! It describes the [SSAFile], [SSAEvent] and [SSAStyle] structs and
+//! provides the [parse] function.
+
 use std::{
     borrow::Borrow,
     collections::HashMap,
@@ -16,6 +20,12 @@ use std::fs::File;
 use super::srt::SRTLine;
 use super::{srt::SRTFile, vtt::VTTFile, vtt::VTTLine, vtt::VTTStyle};
 
+/// [SSAStyle] describes each part of the `Format: ` side of a `.ssa` or `.ass` subtitle.
+///
+/// It holds [color::ColorType] for handling colors and exposes parameters for every part of the
+/// SSA Style header.
+///
+/// Currently only supports `.ass`, more precisely `ScriptType: V4.00+` and `[V4+ Styles]`
 #[derive(Debug, Clone, PartialEq)]
 pub struct SSAStyle {
     pub name: String,
@@ -77,18 +87,38 @@ impl Default for SSAStyle {
     }
 }
 
+/// Describes each individual element of an `Event` line in the `.ass` format
+///
+/// Each element can be individually changed.
+///
+/// Because of its comma separated values in the event line, the timestamp looks like
+/// `00:00:20.00` and it can be represented using [Time::to_ass_string]
 #[derive(Debug, Clone, PartialEq)]
 pub struct SSAEvent {
+    /// Defaults to 0
     pub layer: i32,
+    /// [Time] Value representing the start time of the line being displayed
     pub line_start: Time,
+    /// [Time] Value representing the end time of the line being displayed
     pub line_end: Time,
+    /// String value relating to an [SSAStyle]
     pub style: String,
+    /// Generally this is used for "speaker name", in most cases it's an unused field
     pub name: String,
+    /// SSA/ASS documentation describes the l/r/v margins as being floats so...here goes
+    /// In practice it gets represented as `0020` and similar `{:0>4}` patterns.
     pub lmargin: f32,
+    /// SSA/ASS documentation describes the l/r/v margins as being floats so...here goes
+    /// In practice it gets represented as `0020` and similar `{:0>4}` patterns.
     pub rmargin: f32,
+    /// SSA/ASS documentation describes the l/r/v margins as being floats so...here goes
+    /// In practice it gets represented as `0020` and similar `{:0>4}` patterns.
     pub vmargin: f32,
+    /// SSA Documentation describes it, it's here, no idea what it does, but you can write it if you wish
     pub effect: String,
+    /// SSA Documentation describes it, it's here, no idea what it does, but you can write it if you wish
     pub linetype: String,
+    /// The line's text.
     pub line_text: String,
 }
 impl Eq for SSAEvent {}
@@ -109,7 +139,7 @@ impl Default for SSAEvent {
         }
     }
 }
-
+/// Contains the styles,events and info as well as a format mentioning wether it's `.ass` or `.ssa`
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SSAFile {
     pub events: Vec<SSAEvent>,
@@ -117,6 +147,9 @@ pub struct SSAFile {
     pub info: HashMap<String, String>,
     pub format: String,
 }
+/// The Default SSAFile contains a list of Script Info headers populated with safe and usable default values
+///
+/// In general tests, `ScaledBorderAndShadows: yes` seems to be somewhat required for subtitles to display properly
 impl Default for SSAFile {
     fn default() -> Self {
         let mut default_info: HashMap<String, String> = HashMap::new();
@@ -139,6 +172,16 @@ impl Default for SSAFile {
 }
 
 impl SSAFile {
+    /// Converts the SSAFile to a SRTFile. Due to `.srt` being a far less complex
+    /// format, most styles are being ignored.
+    ///
+    /// Styling of the text can happen with `{i1}aaa{i0}` tags where `i` represents
+    ///  the style and `0`/`1` represent the on/off triggers.
+    ///
+    /// `.srt` supports HTML-like tags for `i`,`b`,`u`, representing italic, bold, underline.
+    ///
+    /// If found, ssa specific triggers for those supported tags are replaced with their `.srt` alternatives.
+    ///
     pub fn to_srt(&self) -> SRTFile {
         let mut a = SRTFile::default();
         let regex =
@@ -173,6 +216,16 @@ impl SSAFile {
         }
         a
     }
+    /// Converts the SSAFile to a VTTFile.
+    ///
+    /// Styling of the text can happen with `{i1}aaa{i0}` tags where `i` represents
+    ///  the style and `0`/`1` represent the on/off triggers.
+    ///
+    /// `.vtt` supports HTML-like tags for `i`,`b`,`u`, representing italic, bold, underline.
+    ///
+    /// If found, ssa specific triggers for those supported tags are replaced with their `.vtt` alternatives.
+    ///
+    /// In addition, if an SSAEvent has a related SSAStyle, the SSAStyle is converted to a VTTStyle that will be wrapped around the lines indicating it.
     pub fn to_vtt(self) -> VTTFile {
         let mut a = VTTFile::default();
         a.lines.clear();
@@ -234,6 +287,8 @@ impl SSAFile {
         }
         a
     }
+
+    /// Writes the SSAFile to a file specified by a path String.
     pub fn to_file(self, path: String) -> std::io::Result<()> {
         let mut w = File::options()
             .create(true)
@@ -337,6 +392,9 @@ impl SSAFile {
     }
 }
 
+/// Parses the given [String] into a [SRTFile]
+///
+/// The string may represent either the path to a file or the file content itself.
 pub fn parse(path_or_content: String) -> Result<SSAFile, std::io::Error> {
     let mut b: String = "".to_string();
     let mut sub: SSAFile = SSAFile::default();
@@ -533,9 +591,5 @@ pub fn parse(path_or_content: String) -> Result<SSAFile, std::io::Error> {
             }
         }
     }
-    if true {
-        Ok(sub)
-    } else {
-        panic!("test")
-    }
+    Ok(sub)
 }

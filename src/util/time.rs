@@ -1,3 +1,10 @@
+//! Helper module to parse, print, manipulate timestamps.
+//!
+//! SSA has a timestamp representation of `00:00:00.00`
+//!
+//! VTT has a timestamp representation of `00:00:00.000`
+//!
+//! SRT has a timestamp representation of `00:00:00,000`
 use std::ops::Add;
 use std::ops::AddAssign;
 use std::ops::Sub;
