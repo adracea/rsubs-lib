@@ -8,7 +8,7 @@ description = "Pure Rust subtitle manipulation and conversion library."
 readme = "README.md"
 repository = "https://github.com/adracea/rsubs-lib"
 license = "MIT"
-keywords = ["subtitle", "subs", "converter","vtt","webvtt","srt","subrip","ssa","substation"]
+keywords = ["subtitle", "subs", "convert","manipulate"]
 categories = ["api-bindings"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
