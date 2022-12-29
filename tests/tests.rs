@@ -276,7 +276,7 @@ You know I’m so excited my glasses are falling off here.
             .to_srt()
             .to_file("./tests/fixtures/res15.srt".to_string())
             .unwrap();
-        let file_value = srt::parse("./tests/fixtures/test.srt".to_string())
+        let _file_value = srt::parse("./tests/fixtures/test.srt".to_string())
             .unwrap()
             .stringify();
         let file_value2: &mut String = &mut "".to_string();

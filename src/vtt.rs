@@ -3,7 +3,6 @@ use super::ssa::{SSAEvent, SSAFile, SSAStyle};
 use crate::srt::SRTFile;
 use crate::util::color::ColorType;
 use crate::util::{color, color::Color, time::Time};
-use once_cell::sync::Lazy;
 use regex::Regex;
 use std::collections::HashMap;
 use std::fs::File;
@@ -20,8 +19,7 @@ pub struct VTTStyle {
     pub name: Option<String>,
     pub others: HashMap<String, String>,
 }
-pub static OVERRIDE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"<(?P<trigger>.*?)>").expect("Regex Failure"));
+
 impl Default for VTTStyle {
     fn default() -> Self {
         VTTStyle {
@@ -360,15 +358,12 @@ impl VTTFile {
                 line_text: i.line_text.clone(),
                 ..Default::default()
             };
-            let invalid_line_text = OVERRIDE.captures_iter(&i.line_text);
-            for k in invalid_line_text {
-                let tag_main = k.get(0).unwrap().as_str();
-                line.line_text = line.line_text.clone().replace(tag_main, "");
-            }
+            line.line_text = replace_invalid_lines(&i.line_text, false);
             ssa.events.push(line);
         }
         ssa
     }
+
     pub fn to_srt(self) -> SRTFile {
         let mut srt = SRTFile::default();
         srt.lines.clear();
@@ -379,16 +374,26 @@ impl VTTFile {
                 line_start: i.line_start,
                 line_text: i.line_text.clone(),
             };
-            let invalid_line_text = OVERRIDE.captures_iter(&i.line_text);
-            for k in invalid_line_text {
-                let tag_main = k.get(0).unwrap().as_str();
-                let tag_trigger = k.name("trigger").unwrap().as_str();
-                if !["/b", "b", "/i", "i", "/u", "u"].contains(&tag_trigger) {
-                    line.line_text = line.line_text.clone().replace(tag_main, "");
-                }
-            }
+            line.line_text = replace_invalid_lines(&i.line_text, true);
             srt.lines.push(line);
         }
         srt
     }
+}
+
+pub fn replace_invalid_lines(str: &str, triggers: bool) -> String {
+    let mut res = String::from(str);
+    let reg = Regex::new(r"<(?P<trigger>.*?)>").expect("Regex Failure");
+    for k in reg.captures_iter(str) {
+        let tag_main = k.get(0).unwrap().as_str();
+        if triggers {
+            let tag_trigger = k.name("trigger").unwrap().as_str();
+            if !["/b", "b", "/i", "i", "/u", "u"].contains(&tag_trigger) {
+                res = res.clone().replace(tag_main, "");
+            }
+        } else {
+            res = res.clone().replace(tag_main, "");
+        }
+    }
+    res
 }
