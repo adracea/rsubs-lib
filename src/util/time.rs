@@ -5,6 +5,9 @@
 //! VTT has a timestamp representation of `00:00:00.000`
 //!
 //! SRT has a timestamp representation of `00:00:00,000`
+
+use serde::Deserialize;
+use serde::Serialize;
 use std::ops::Add;
 use std::ops::AddAssign;
 use std::ops::Sub;
@@ -12,7 +15,7 @@ use std::result::Result;
 use std::str::FromStr;
 use std::{fmt, ops::Div};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Time {
     pub h: u32,
     pub m: u32,

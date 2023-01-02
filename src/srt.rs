@@ -3,6 +3,9 @@
 //! It describes the [SRTFile] and [SRTLine] structs and
 //! provides the [parse] function.
 
+use serde::Deserialize;
+use serde::Serialize;
+
 use crate::util::time::Time;
 use std::fs::File;
 use std::io::Read;
@@ -46,7 +49,7 @@ use super::vtt::VTTLine;
 /// a.to_file("./tests/fixtures/doctest1.srt".to_string());
 ///
 /// ```
-#[derive(Debug, Clone, PartialEq, Default, Eq)]
+#[derive(Debug, Clone, PartialEq, Default, Eq, Serialize, Deserialize)]
 pub struct SRTFile {
     pub lines: Vec<SRTLine>,
 }
@@ -54,7 +57,7 @@ pub struct SRTFile {
 /// Describes each line
 ///
 /// Each line has a start and end [Time], a [String] text and an [i32] line number.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SRTLine {
     pub line_number: i32,
     pub line_text: String,

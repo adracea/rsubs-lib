@@ -6,12 +6,14 @@
 //!
 //! VTT Colors start with `#` and are the usual ARGB or RGB hex formats.
 use core::panic;
+use serde::Deserialize;
+use serde::Serialize;
 use std::error::Error;
 use std::fmt;
 use std::str::FromStr;
 
 /// Generic ARGB color struct.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Color {
     pub r: u8,
     pub g: u8,
@@ -160,7 +162,7 @@ impl FromStr for Color {
 }
 
 /// Used to easily display and move colors between representation types.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ColorType {
     SSAColor(Color),
     VTTColor(Color),
@@ -207,7 +209,7 @@ impl fmt::Display for Color {
         )
     }
 }
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub enum Alignment {
     BottomLeft = 1,
     BottomCenter = 2,

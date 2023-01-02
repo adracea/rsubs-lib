@@ -15,6 +15,7 @@ use crate::util::{
     time::Time,
 };
 use regex::Regex;
+use serde::{Deserialize, Serialize};
 use std::fs::File;
 
 use super::srt::SRTLine;
@@ -26,7 +27,7 @@ use super::{srt::SRTFile, vtt::VTTFile, vtt::VTTLine, vtt::VTTStyle};
 /// SSA Style header.
 ///
 /// Currently only supports `.ass`, more precisely `ScriptType: V4.00+` and `[V4+ Styles]`
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SSAStyle {
     pub name: String,
     pub fontname: String,
@@ -93,7 +94,7 @@ impl Default for SSAStyle {
 ///
 /// Because of its comma separated values in the event line, the timestamp looks like
 /// `00:00:20.00` and it can be represented using [Time::to_ass_string]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SSAEvent {
     /// Defaults to 0
     pub layer: i32,
@@ -140,7 +141,7 @@ impl Default for SSAEvent {
     }
 }
 /// Contains the styles,events and info as well as a format mentioning wether it's `.ass` or `.ssa`
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SSAFile {
     pub events: Vec<SSAEvent>,
     pub styles: Vec<SSAStyle>,
@@ -182,7 +183,7 @@ impl SSAFile {
     ///
     /// If found, ssa specific triggers for those supported tags are replaced with their `.srt` alternatives.
     ///
-    pub fn to_srt(&self) -> SRTFile {
+    pub fn to_srt(self) -> SRTFile {
         let mut a = SRTFile::default();
         let regex =
             Regex::new(r"(?P<main>\{\\(?P<type>.)(?P<trigger>.*?)\})").expect("Regex broke");

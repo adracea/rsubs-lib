@@ -9,13 +9,15 @@ use crate::srt::SRTFile;
 use crate::util::color::ColorType;
 use crate::util::{color, color::Color, time::Time};
 use regex::Regex;
+use serde::Deserialize;
+use serde::Serialize;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::str::FromStr;
 
 /// The VTTStyle contains information that generally composes the `::cue` header
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VTTStyle {
     pub color: ColorType,
     pub font_family: String,
@@ -40,7 +42,7 @@ impl Default for VTTStyle {
     }
 }
 /// The VTTLine contains information about the line itself as well as the positional information of the line
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VTTLine {
     pub line_number: String,
     pub style: Option<String>,
@@ -63,7 +65,7 @@ impl Default for VTTLine {
 }
 
 /// Describes how the line is positioned on screen. By default it's all 0 with a center alignment.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VTTPos {
     pub pos: i32,
     pub size: i32,
@@ -82,7 +84,7 @@ impl Default for VTTPos {
 }
 
 /// Contains [VTTStyle]s and [VTTLine]s
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VTTFile {
     pub styles: Vec<VTTStyle>,
     pub lines: Vec<VTTLine>,
@@ -94,6 +96,140 @@ impl Default for VTTFile {
             lines: vec![VTTLine::default()],
         }
     }
+}
+
+impl VTTFile {
+    /// Takes the path of the file in the form of a [String] to be written to as input.
+    pub fn to_file(self, path: String) -> std::io::Result<()> {
+        let mut w = File::options()
+            .write(true)
+            .create(true)
+            .open(path)
+            .expect("File can't be created");
+        w.write_all("WEBVTT\r\n\r\n".as_bytes())?;
+        for i in self.styles {
+            let mut style_block: String = "".to_string();
+            if i.name.is_some() {
+                style_block += &("STYLE\r\n::cue(".to_string() + &i.name.unwrap() + ") {\r\n");
+            } else {
+                style_block += "STYLE\r\n::cue {\r\n";
+            }
+            style_block += &("color: ".to_string() + &i.color.to_string() + ";\r\n");
+            style_block +=
+                &("background-color: ".to_string() + &i.background_color.to_string() + ";\r\n");
+            style_block += &("font-family: ".to_string() + &i.font_family + ";\r\n");
+            style_block += &("font-size: ".to_string() + &i.font_size.to_string() + ";\r\n");
+            style_block += &("text-shadow: ".to_string() + &i.text_shadow.to_string() + ";\r\n");
+            style_block += "}\r\n\r\n";
+            w.write_all(style_block.as_bytes())?;
+        }
+        for (i, j) in self.lines.iter().enumerate() {
+            let mut line_block: String = "".to_string();
+            if j.line_number.is_empty() {
+                line_block += &((i + 1).to_string() + "\r\n")
+            } else {
+                line_block += &(j.line_number.to_string() + "\r\n")
+            }
+            line_block += &(j.line_start.to_string() + " --> " + &j.line_end.to_string());
+            if j.position.is_some() {
+                let pos = j.position.clone().unwrap();
+                line_block += &format!(
+                    " position:{:0>3}% size:{:0>3}% line:{} align:{}\r\n",
+                    pos.pos, pos.size, pos.line, pos.align
+                );
+            } else {
+                line_block += "\r\n";
+            }
+            line_block += &(j.line_text.to_string().replace("\\N", "\r\n") + "\r\n\r\n");
+            w.write_all(line_block.as_bytes())?;
+        }
+        Ok(())
+    }
+
+    /// When converting to SSAFile, information about the VTTStyles is maintained but not applied.
+    pub fn to_ass(self) -> SSAFile {
+        let mut ssa = SSAFile::default();
+        ssa.events.clear();
+        ssa.styles.clear();
+        for (_ctr, i) in self.styles.into_iter().enumerate() {
+            let styl = SSAStyle {
+                firstcolor: if i.color.get_color().a == 255 {
+                    color::ColorType::SSAColor(Color {
+                        r: i.color.get_color().r,
+                        g: i.color.get_color().g,
+                        b: i.color.get_color().b,
+                        a: 0,
+                    })
+                } else {
+                    color::ColorType::SSAColor(i.color.get_color())
+                },
+                fontname: i
+                    .font_family
+                    .split('\"')
+                    .collect::<Vec<&str>>()
+                    .get(1)
+                    .unwrap_or(&"Arial")
+                    .to_string(),
+                backgroundcolor: color::ColorType::SSAColor(i.background_color.get_color()),
+                name: i.name.unwrap_or_else(|| "Default".to_string()),
+                fontsize: i
+                    .font_size
+                    .strip_suffix("px")
+                    .unwrap_or(&i.font_size.to_string())
+                    .to_string()
+                    .parse::<f32>()
+                    .unwrap_or(20.0),
+                ..Default::default()
+            };
+            ssa.styles.push(styl)
+        }
+        for (_ctr, i) in self.lines.into_iter().enumerate() {
+            let mut line = SSAEvent {
+                line_end: i.line_end,
+                line_start: i.line_start,
+                line_text: i.line_text.clone(),
+                ..Default::default()
+            };
+            line.line_text = replace_invalid_lines(&i.line_text, false);
+            ssa.events.push(line);
+        }
+        ssa
+    }
+    /// SRT is basically a VTT without the styles
+    pub fn to_srt(self) -> SRTFile {
+        let mut srt = SRTFile::default();
+        srt.lines.clear();
+        for (ctr, i) in self.lines.into_iter().enumerate() {
+            let mut line = SRTLine {
+                line_number: i.line_number.parse::<i32>().unwrap_or(ctr as i32 + 1),
+                line_end: i.line_end,
+                line_start: i.line_start,
+                line_text: i.line_text.clone(),
+            };
+            line.line_text = replace_invalid_lines(&i.line_text, true);
+            srt.lines.push(line);
+        }
+        srt
+    }
+}
+
+/// Replaces strings that are invalid in certain contexts. SSA doesn't support html-like tags
+/// and SRT only support `b`,`i`,`u` representing bold, italics, underline.
+pub fn replace_invalid_lines(str: &str, triggers: bool) -> String {
+    let mut res = String::from(str);
+    let reg = Regex::new(r"<(?P<trigger>.*?)>").expect("Regex Failure");
+    for k in reg.captures_iter(str) {
+        let tag_main = k.get(0).unwrap().as_str();
+        if triggers {
+            let tag_trigger = k.name("trigger").unwrap().as_str();
+            if !["/b", "b", "/i", "i", "/u", "u"].contains(&tag_trigger) {
+                res = res.clone().replace(tag_main, "");
+            }
+        } else {
+            res = res.clone().replace(tag_main, "");
+        }
+    }
+    res
 }
 
 /// Parses the given [String] into a [VTTFile]
@@ -281,138 +417,4 @@ pub fn parse(path_or_content: String) -> Result<VTTFile, std::io::Error> {
         }
     }
     Ok(sub)
-}
-
-impl VTTFile {
-    /// Takes the path of the file in the form of a [String] to be written to as input.
-    pub fn to_file(self, path: String) -> std::io::Result<()> {
-        let mut w = File::options()
-            .write(true)
-            .create(true)
-            .open(path)
-            .expect("File can't be created");
-        w.write_all("WEBVTT\r\n\r\n".as_bytes())?;
-        for i in self.styles {
-            let mut style_block: String = "".to_string();
-            if i.name.is_some() {
-                style_block += &("STYLE\r\n::cue(".to_string() + &i.name.unwrap() + ") {\r\n");
-            } else {
-                style_block += "STYLE\r\n::cue {\r\n";
-            }
-            style_block += &("color: ".to_string() + &i.color.to_string() + ";\r\n");
-            style_block +=
-                &("background-color: ".to_string() + &i.background_color.to_string() + ";\r\n");
-            style_block += &("font-family: ".to_string() + &i.font_family + ";\r\n");
-            style_block += &("font-size: ".to_string() + &i.font_size.to_string() + ";\r\n");
-            style_block += &("text-shadow: ".to_string() + &i.text_shadow.to_string() + ";\r\n");
-            style_block += "}\r\n\r\n";
-            w.write_all(style_block.as_bytes())?;
-        }
-        for (i, j) in self.lines.iter().enumerate() {
-            let mut line_block: String = "".to_string();
-            if j.line_number.is_empty() {
-                line_block += &((i + 1).to_string() + "\r\n")
-            } else {
-                line_block += &(j.line_number.to_string() + "\r\n")
-            }
-            line_block += &(j.line_start.to_string() + " --> " + &j.line_end.to_string());
-            if j.position.is_some() {
-                let pos = j.position.clone().unwrap();
-                line_block += &format!(
-                    " position:{:0>3}% size:{:0>3}% line:{} align:{}\r\n",
-                    pos.pos, pos.size, pos.line, pos.align
-                );
-            } else {
-                line_block += "\r\n";
-            }
-            line_block += &(j.line_text.to_string().replace("\\N", "\r\n") + "\r\n\r\n");
-            w.write_all(line_block.as_bytes())?;
-        }
-        Ok(())
-    }
-
-    /// When converting to SSAFile, information about the VTTStyles is maintained but not applied.
-    pub fn to_ass(self) -> SSAFile {
-        let mut ssa = SSAFile::default();
-        ssa.events.clear();
-        ssa.styles.clear();
-        for (_ctr, i) in self.styles.into_iter().enumerate() {
-            let styl = SSAStyle {
-                firstcolor: if i.color.get_color().a == 255 {
-                    color::ColorType::SSAColor(Color {
-                        r: i.color.get_color().r,
-                        g: i.color.get_color().g,
-                        b: i.color.get_color().b,
-                        a: 0,
-                    })
-                } else {
-                    color::ColorType::SSAColor(i.color.get_color())
-                },
-                fontname: i
-                    .font_family
-                    .split('\"')
-                    .collect::<Vec<&str>>()
-                    .get(1)
-                    .unwrap_or(&"Arial")
-                    .to_string(),
-                backgroundcolor: color::ColorType::SSAColor(i.background_color.get_color()),
-                name: i.name.unwrap_or_else(|| "Default".to_string()),
-                fontsize: i
-                    .font_size
-                    .strip_suffix("px")
-                    .unwrap_or(&i.font_size.to_string())
-                    .to_string()
-                    .parse::<f32>()
-                    .unwrap_or(20.0),
-                ..Default::default()
-            };
-            ssa.styles.push(styl)
-        }
-        for (_ctr, i) in self.lines.into_iter().enumerate() {
-            let mut line = SSAEvent {
-                line_end: i.line_end,
-                line_start: i.line_start,
-                line_text: i.line_text.clone(),
-                ..Default::default()
-            };
-            line.line_text = replace_invalid_lines(&i.line_text, false);
-            ssa.events.push(line);
-        }
-        ssa
-    }
-    /// SRT is basically a VTT without the styles
-    pub fn to_srt(self) -> SRTFile {
-        let mut srt = SRTFile::default();
-        srt.lines.clear();
-        for (ctr, i) in self.lines.into_iter().enumerate() {
-            let mut line = SRTLine {
-                line_number: i.line_number.parse::<i32>().unwrap_or(ctr as i32 + 1),
-                line_end: i.line_end,
-                line_start: i.line_start,
-                line_text: i.line_text.clone(),
-            };
-            line.line_text = replace_invalid_lines(&i.line_text, true);
-            srt.lines.push(line);
-        }
-        srt
-    }
-}
-
-/// Replaces strings that are invalid in certain contexts. SSA doesn't support html-like tags
-/// and SRT only support `b`,`i`,`u` representing bold, italics, underline.
-pub fn replace_invalid_lines(str: &str, triggers: bool) -> String {
-    let mut res = String::from(str);
-    let reg = Regex::new(r"<(?P<trigger>.*?)>").expect("Regex Failure");
-    for k in reg.captures_iter(str) {
-        let tag_main = k.get(0).unwrap().as_str();
-        if triggers {
-            let tag_trigger = k.name("trigger").unwrap().as_str();
-            if !["/b", "b", "/i", "i", "/u", "u"].contains(&tag_trigger) {
-                res = res.clone().replace(tag_main, "");
-            }
-        } else {
-            res = res.clone().replace(tag_main, "");
-        }
-    }
-    res
 }
