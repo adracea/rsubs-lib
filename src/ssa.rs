@@ -6,6 +6,7 @@
 use std::{
     borrow::Borrow,
     collections::HashMap,
+    fmt::Display,
     io::{Read, Write},
     str::FromStr,
 };
@@ -296,12 +297,19 @@ impl SSAFile {
             .write(true)
             .open(path)
             .expect("File can't be created");
+        write!(w, "{}", self)?;
+        Ok(())
+    }
+}
+
+impl Display for SSAFile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut str = "[Script Info]\r\n".to_string();
-        for (i, j) in self.info {
+        for (i, j) in self.info.clone() {
             str += &format!("{}: {}\r\n", i, j).to_string();
         }
         str += "\r\n[V4+ Styles]\r\nFormat: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,Strikeout,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding\r\n";
-        for i in self.styles {
+        for i in self.styles.clone() {
             str += &("Style: ".to_string()
                 + &i.name
                 + ","
@@ -364,7 +372,7 @@ impl SSAFile {
         }
 
         str += "\r\n[Events]\r\nFormat: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\r\n";
-        for i in self.events {
+        for i in self.events.clone() {
             str += &(i.linetype
                 + ": "
                 + &i.layer.to_string()
@@ -388,8 +396,7 @@ impl SSAFile {
                 + &i.line_text
                 + "\r\n");
         }
-        w.write_all(str.as_bytes()).expect("Couldn't write");
-        Ok(())
+        write!(f, "{}", str)
     }
 }
 

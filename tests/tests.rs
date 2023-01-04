@@ -276,9 +276,7 @@ You know I’m so excited my glasses are falling off here.
             .to_srt()
             .to_file("./tests/fixtures/res15.srt".to_string())
             .unwrap();
-        let _file_value = srt::parse("./tests/fixtures/test.srt".to_string())
-            .unwrap()
-            .stringify();
+        let _file_value = srt::parse("./tests/fixtures/test.srt".to_string()).unwrap();
         let file_value2: &mut String = &mut "".to_string();
         File::open("./tests/fixtures/res15.srt")
             .expect("WrongFile")
@@ -326,7 +324,7 @@ You know I’m so excited my glasses are falling off here.
             .read_to_string(file_value2)
             .expect("Couldn't write");
         let srtfile = srt::parse(file_value.to_string()).unwrap();
-        assert_eq!(file_value.to_string(), srtfile.stringify());
+        assert_eq!(file_value.to_string(), format!("{}", srtfile));
     }
     #[test]
     fn test_parse_vtt() {

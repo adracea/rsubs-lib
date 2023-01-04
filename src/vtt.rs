@@ -12,6 +12,7 @@ use regex::Regex;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::str::FromStr;
@@ -106,43 +107,7 @@ impl VTTFile {
             .create(true)
             .open(path)
             .expect("File can't be created");
-        w.write_all("WEBVTT\r\n\r\n".as_bytes())?;
-        for i in self.styles {
-            let mut style_block: String = "".to_string();
-            if i.name.is_some() {
-                style_block += &("STYLE\r\n::cue(".to_string() + &i.name.unwrap() + ") {\r\n");
-            } else {
-                style_block += "STYLE\r\n::cue {\r\n";
-            }
-            style_block += &("color: ".to_string() + &i.color.to_string() + ";\r\n");
-            style_block +=
-                &("background-color: ".to_string() + &i.background_color.to_string() + ";\r\n");
-            style_block += &("font-family: ".to_string() + &i.font_family + ";\r\n");
-            style_block += &("font-size: ".to_string() + &i.font_size.to_string() + ";\r\n");
-            style_block += &("text-shadow: ".to_string() + &i.text_shadow.to_string() + ";\r\n");
-            style_block += "}\r\n\r\n";
-            w.write_all(style_block.as_bytes())?;
-        }
-        for (i, j) in self.lines.iter().enumerate() {
-            let mut line_block: String = "".to_string();
-            if j.line_number.is_empty() {
-                line_block += &((i + 1).to_string() + "\r\n")
-            } else {
-                line_block += &(j.line_number.to_string() + "\r\n")
-            }
-            line_block += &(j.line_start.to_string() + " --> " + &j.line_end.to_string());
-            if j.position.is_some() {
-                let pos = j.position.clone().unwrap();
-                line_block += &format!(
-                    " position:{:0>3}% size:{:0>3}% line:{} align:{}\r\n",
-                    pos.pos, pos.size, pos.line, pos.align
-                );
-            } else {
-                line_block += "\r\n";
-            }
-            line_block += &(j.line_text.to_string().replace("\\N", "\r\n") + "\r\n\r\n");
-            w.write_all(line_block.as_bytes())?;
-        }
+        write!(w, "{}", self)?;
         Ok(())
     }
 
@@ -213,6 +178,49 @@ impl VTTFile {
     }
 }
 
+impl Display for VTTFile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut s = String::from("WEBVTT\r\n\r\n");
+
+        for i in self.clone().styles {
+            let mut style_block: String = "".to_string();
+            if i.name.is_some() {
+                style_block += &("STYLE\r\n::cue(".to_string() + &i.name.unwrap() + ") {\r\n");
+            } else {
+                style_block += "STYLE\r\n::cue {\r\n";
+            }
+            style_block += &("color: ".to_string() + &i.color.to_string() + ";\r\n");
+            style_block +=
+                &("background-color: ".to_string() + &i.background_color.to_string() + ";\r\n");
+            style_block += &("font-family: ".to_string() + &i.font_family + ";\r\n");
+            style_block += &("font-size: ".to_string() + &i.font_size.to_string() + ";\r\n");
+            style_block += &("text-shadow: ".to_string() + &i.text_shadow.to_string() + ";\r\n");
+            style_block += "}\r\n\r\n";
+            s.push_str(&style_block);
+        }
+        for (i, j) in self.lines.iter().enumerate() {
+            let mut line_block: String = "".to_string();
+            if j.line_number.is_empty() {
+                line_block += &((i + 1).to_string() + "\r\n")
+            } else {
+                line_block += &(j.line_number.to_string() + "\r\n")
+            }
+            line_block += &(j.line_start.to_string() + " --> " + &j.line_end.to_string());
+            if j.position.is_some() {
+                let pos = j.position.clone().unwrap();
+                line_block += &format!(
+                    " position:{:0>3}% size:{:0>3}% line:{} align:{}\r\n",
+                    pos.pos, pos.size, pos.line, pos.align
+                );
+            } else {
+                line_block += "\r\n";
+            }
+            line_block += &(j.line_text.to_string().replace("\\N", "\r\n") + "\r\n\r\n");
+            s.push_str(&line_block);
+        }
+        write!(f, "{}", s)
+    }
+}
 /// Replaces strings that are invalid in certain contexts. SSA doesn't support html-like tags
 /// and SRT only support `b`,`i`,`u` representing bold, italics, underline.
 pub fn replace_invalid_lines(str: &str, triggers: bool) -> String {

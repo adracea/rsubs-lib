@@ -9,5 +9,5 @@ fn main() {
         line.line_start += 50;
         line.line_text.push_str(" Ipsum");
     }
-    println!("{}", srt.stringify());
+    println!("{}", srt);
 }

@@ -7,6 +7,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::util::time::Time;
+use std::fmt::Display;
 use std::fs::File;
 use std::io::Read;
 use std::io::Write;
@@ -43,7 +44,7 @@ use super::vtt::VTTLine;
 ///     line.line_text.push_str(" Ipsum"); // add "Ipsum" to the end of each line.
 /// }
 /// // print the parsed and modified `.srt` file
-/// println!("{}",a.clone().stringify());
+/// println!("{}",a.clone());
 ///
 /// // and then write it to a file
 /// a.to_file("./tests/fixtures/doctest1.srt".to_string());
@@ -114,14 +115,16 @@ impl SRTFile {
             .create(true)
             .open(path)
             .expect("File can't be created");
-        w.write_all(self.stringify().as_bytes())
-            .expect("Couldn't write");
+        write!(w, "{}", self)?;
         Ok(())
     }
+}
+
+impl Display for SRTFile {
     /// Consumes self and dumps the file to String.
-    pub fn stringify(self) -> String {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut lines = "".to_string();
-        for i in self.lines {
+        for i in self.lines.clone() {
             let line = i.line_number.to_string()
                 + "\r\n"
                 + &i.line_start.to_string().replace('.', ",")
@@ -132,10 +135,9 @@ impl SRTFile {
                 + "\r\n\r\n";
             lines += &line;
         }
-        lines
+        write!(f, "{}", lines)
     }
 }
-
 /// Parses the given [String] into a [SRTFile]
 ///
 /// The string may represent either the path to a file or the file content itself.

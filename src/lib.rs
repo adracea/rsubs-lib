@@ -14,7 +14,7 @@
 //!       line.line_end += 1000;
 //!       line.line_start += 1000;
 //!   }
-//!   println!("{}", srt.stringify());
+//!   println!("{}", srt);
 //!   ```
 //!
 //!
