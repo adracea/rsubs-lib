@@ -119,7 +119,16 @@ impl SRTFile {
         Ok(())
     }
 }
-
+impl From<VTTFile> for SRTFile {
+    fn from(a: VTTFile) -> Self {
+        a.to_srt()
+    }
+}
+impl From<SSAFile> for SRTFile {
+    fn from(a: SSAFile) -> Self {
+        a.to_srt()
+    }
+}
 impl Display for SRTFile {
     /// Consumes self and dumps the file to String.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -138,6 +147,55 @@ impl Display for SRTFile {
         write!(f, "{}", lines)
     }
 }
+
+impl FromStr for SRTFile {
+    type Err = std::io::Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let path_or_content = s.to_string();
+        let mut b: String = "".to_string();
+        let mut sub: SRTFile = SRTFile::default();
+        if !path_or_content.contains("\r\n") {
+            if std::fs::read(&path_or_content).is_ok() {
+                let mut f = File::open(path_or_content).expect("Couldn't open file");
+                f.read_to_string(&mut b).expect("Couldn't read file");
+            }
+        } else {
+            b = path_or_content;
+        }
+        let lines = b.split("\r\n\r\n").collect::<Vec<&str>>();
+        for i in lines {
+            let mut subline = SRTLine::default();
+            let subsplit: Vec<&str> = i.split("\r\n").collect();
+            if !subsplit
+                .first()
+                .expect("Failed to parse line number")
+                .is_empty()
+            {
+                subline.line_number = subsplit
+                    .first()
+                    .expect("Failed to parse line number")
+                    .parse::<i32>()
+                    .expect("Failed to parse line number");
+                let mut timesplit = subsplit
+                    .get(1)
+                    .expect("Failed to parse times line")
+                    .split(" --> ");
+                (subline.line_start, subline.line_end) = (
+                    Time::from_str(timesplit.next().unwrap()).unwrap(),
+                    Time::from_str(timesplit.next().unwrap()).unwrap(),
+                );
+                subline.line_text = subsplit
+                    .get(2..)
+                    .expect("Couldn't find text")
+                    .join("\r\n")
+                    .replace("\r\n", "\\N");
+                sub.lines.push(subline)
+            }
+        }
+        Ok(sub)
+    }
+}
+
 /// Parses the given [String] into a [SRTFile]
 ///
 /// The string may represent either the path to a file or the file content itself.

@@ -240,6 +240,204 @@ pub fn replace_invalid_lines(str: &str, triggers: bool) -> String {
     res
 }
 
+impl From<SSAFile> for VTTFile {
+    fn from(a: SSAFile) -> Self {
+        a.to_vtt()
+    }
+}
+impl From<SRTFile> for VTTFile {
+    fn from(a: SRTFile) -> Self {
+        a.to_vtt()
+    }
+}
+impl FromStr for VTTFile {
+    type Err = std::io::Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let path_or_content = s.to_string();
+        let mut b: String = "".to_string();
+        let mut sub: VTTFile = VTTFile::default();
+        if std::fs::read(&path_or_content).is_ok() {
+            let mut f = File::open(path_or_content).expect("Couldn't open file");
+            f.read_to_string(&mut b).expect("Couldn't read file");
+        } else {
+            b = path_or_content;
+        }
+        let line_blocks = b.split("\r\n\r\n").collect::<Vec<&str>>();
+        // Unwrapping here is safe because the above split will always have `Some(&[""])`.
+        if !line_blocks.first().unwrap().contains("WEBVTT") {
+            panic!("Not a  WEBVTT file");
+        }
+        let mut line_found = false;
+        let mut styles_found = 0;
+        for i in line_blocks {
+            if i.trim().starts_with("::cue") | i.trim().starts_with("STYLE") {
+                let line = i.split("\r\n").collect::<Vec<&str>>();
+                let mut styl = VTTStyle::default();
+                for i in line {
+                    if i.starts_with("color:") {
+                        styl.color = ColorType::VTTColor0A(
+                            Color::from_str(
+                                i.split(": ")
+                                    .collect::<Vec<&str>>()
+                                    .get(1)
+                                    .expect("No Color ")
+                                    .strip_suffix(';')
+                                    .expect("Broken Color"),
+                            )
+                            .unwrap_or_default(),
+                        );
+                    } else if i.starts_with("font-family:") {
+                        styl.font_family = i
+                            .split(": ")
+                            .collect::<Vec<&str>>()
+                            .get(1)
+                            .expect("No Font ")
+                            .strip_suffix(';')
+                            .expect("Broken Font")
+                            .to_string();
+                    } else if i.starts_with("font-size:") {
+                        styl.font_size = i
+                            .split(": ")
+                            .collect::<Vec<&str>>()
+                            .get(1)
+                            .expect("No Font size")
+                            .strip_suffix(';')
+                            .expect("Broken Font size")
+                            .to_string();
+                    } else if i.starts_with("text-shadow:") {
+                        styl.text_shadow = i
+                            .split(": ")
+                            .collect::<Vec<&str>>()
+                            .get(1)
+                            .expect("No Font size")
+                            .strip_suffix(';')
+                            .expect("Broken Font size")
+                            .to_string();
+                    } else if i.starts_with("background-color:") {
+                        styl.background_color = ColorType::VTTColor(
+                            Color::from_str(
+                                i.split(": ")
+                                    .collect::<Vec<&str>>()
+                                    .get(1)
+                                    .expect("No Color ")
+                                    .strip_suffix(';')
+                                    .expect("Broken Color"),
+                            )
+                            .unwrap_or_default(),
+                        );
+                    } else if i.starts_with("::cue(") {
+                        styl.name = Some(
+                            i.split(&['(', ')'])
+                                .collect::<Vec<&str>>()
+                                .get(1)
+                                .unwrap_or(&"Name")
+                                .to_string(),
+                        );
+                    }
+                }
+                styles_found += 1;
+                if styles_found == 1 {
+                    sub.styles.clear();
+                }
+                sub.styles.push(styl);
+            } else if i.trim().starts_with("NOTE") || i.trim().starts_with("WEBVTT") {
+                continue;
+            } else {
+                let mut subline = VTTLine::default();
+                let subsplit: Vec<&str> = i.split("\r\n").collect();
+                if !subsplit
+                    .first()
+                    .expect("Failed to parse line number")
+                    .is_empty()
+                {
+                    let mut idxshift: usize = 0;
+                    subline.line_number = if !subsplit
+                        .first()
+                        .expect("Failed to parse line number")
+                        .to_string()
+                        .contains(" --> ")
+                    {
+                        subsplit
+                            .first()
+                            .expect("Failed to parse line number")
+                            .to_string()
+                    } else {
+                        idxshift += 1;
+                        "".to_string()
+                    };
+
+                    let mut timesplit = subsplit
+                        .get(1 - idxshift)
+                        .expect("Failed to parse times line")
+                        .split(" --> ");
+                    (subline.line_start, subline.line_end) = (
+                        Time::from_str(timesplit.next().unwrap()).unwrap(),
+                        Time::from_str(
+                            timesplit
+                                .next()
+                                .unwrap()
+                                .to_string()
+                                .splitn(2, ' ')
+                                .collect::<Vec<&str>>()
+                                .first()
+                                .unwrap(),
+                        )
+                        .unwrap(),
+                    );
+                    let mut spos = VTTPos::default();
+                    let posstring: String = subsplit
+                        .get(1 - idxshift)
+                        .expect("Failed to parse times line")
+                        .to_string()
+                        .splitn(4, ' ')
+                        .collect::<Vec<&str>>()
+                        .get(3)
+                        .unwrap_or(&"")
+                        .to_string();
+                    let mut poss: HashMap<String, String> = HashMap::new();
+                    posstring.split(' ').for_each(|x| {
+                        poss.insert(
+                            x.split(':')
+                                .collect::<Vec<&str>>()
+                                .first()
+                                .unwrap_or(&"")
+                                .to_string(),
+                            x.split(':')
+                                .collect::<Vec<&str>>()
+                                .get(1)
+                                .unwrap_or(&"")
+                                .to_string(),
+                        );
+                    });
+                    for (px, py) in poss {
+                        if px == "position" {
+                            spos.pos = py.replace('%', "").parse::<i32>().expect("number");
+                        } else if px == "align" {
+                            spos.align = py;
+                        } else if px == "size" {
+                            spos.size = py.replace('%', "").parse::<i32>().expect("number");
+                        } else if px == "line" {
+                            spos.line = py.replace('%', "").parse::<i32>().expect("number");
+                        }
+                    }
+                    subline.position = Some(spos);
+                    subline.line_text = subsplit
+                        .get((2 - idxshift)..)
+                        .expect("Couldn't find text")
+                        .join("\r\n")
+                        .replace("\r\n", "\\N");
+                    if !line_found {
+                        sub.lines.clear();
+                        line_found = true;
+                    }
+                    sub.lines.push(subline)
+                }
+            }
+        }
+        Ok(sub)
+    }
+}
+
 /// Parses the given [String] into a [VTTFile]
 ///
 /// The string may represent either the path to a file or the file content itself.

@@ -173,6 +173,16 @@ impl Default for SSAFile {
     }
 }
 
+impl From<VTTFile> for SSAFile {
+    fn from(a: VTTFile) -> Self {
+        a.to_ass()
+    }
+}
+impl From<SRTFile> for SSAFile {
+    fn from(a: SRTFile) -> Self {
+        a.to_ass()
+    }
+}
 impl SSAFile {
     /// Converts the SSAFile to a SRTFile. Due to `.srt` being a far less complex
     /// format, most styles are being ignored.
@@ -397,6 +407,211 @@ impl Display for SSAFile {
                 + "\r\n");
         }
         write!(f, "{}", str)
+    }
+}
+
+impl FromStr for SSAFile {
+    type Err = std::io::Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let path_or_content = s.to_string();
+        let mut b: String = "".to_string();
+        let mut sub: SSAFile = SSAFile::default();
+        if std::fs::read(&path_or_content).is_ok() {
+            let mut f = File::open(path_or_content)?;
+            f.read_to_string(&mut b)?;
+        } else {
+            b = path_or_content;
+        }
+        let c: Vec<&str> = b.split("\r\n\r\n").collect();
+        for i in c {
+            if i.contains("Styles]") {
+                sub.styles.clear();
+                let mut style: HashMap<String, Vec<&str>> = HashMap::new();
+                let keys = i
+                    .split("\r\n")
+                    .filter(|x| x.starts_with("Format:"))
+                    .collect::<String>();
+                let fmtheaders = keys.strip_prefix("Format: ").unwrap().replace(' ', "");
+                let finalheaders = fmtheaders.split(',').collect::<Vec<&str>>();
+                style.insert("Format".to_string(), finalheaders);
+
+                let keys2 = i
+                    .split('\n')
+                    .filter(|&x| x.starts_with("Style: "))
+                    .map(|x| {
+                        <&str>::clone(
+                            x.strip_prefix("Style: ")
+                                .unwrap()
+                                .split(',')
+                                .collect::<Vec<&str>>()
+                                .first()
+                                .unwrap(),
+                        )
+                    })
+                    .collect::<Vec<&str>>();
+                let values2 = i
+                    .split("\r\n")
+                    .filter(|&x| x.starts_with("Style: "))
+                    .map(|x| x.strip_prefix("Style: ").unwrap().borrow())
+                    .collect::<Vec<&str>>();
+                for (i, j) in keys2.into_iter().enumerate() {
+                    style.insert(
+                        j.to_string(),
+                        values2.get(i).unwrap().split(',').collect::<Vec<&str>>(),
+                    );
+                }
+                for (k, l) in style.clone().into_iter() {
+                    if k == *"Format" {
+                        continue;
+                    }
+                    let styl = SSAStyle {
+                        name: l.first().expect("missing_name").to_string(),
+                        fontname: l.get(1).expect("missing_name").to_string(),
+                        fontsize: l
+                            .get(2)
+                            .expect("missing_name")
+                            .to_string()
+                            .parse::<f32>()
+                            .expect("msg"),
+                        firstcolor: color::ColorType::SSAColor(
+                            Color::from_str(l.get(3).expect("missing_name")).expect("msg"),
+                        ),
+                        secondcolor: color::ColorType::SSAColor(
+                            Color::from_str(l.get(4).expect("missing_name")).expect("msg"),
+                        ),
+                        outlinecolor: color::ColorType::SSAColor(
+                            Color::from_str(l.get(5).expect("missing_name")).expect("msg"),
+                        ),
+                        backgroundcolor: color::ColorType::SSAColor(
+                            Color::from_str(l.get(6).expect("missing_name")).expect("msg"),
+                        ),
+                        bold: l.get(7).expect("missing value") == &"-1",
+                        italic: l.get(8).expect("missing value") == &"-1",
+                        unerline: l.get(9).expect("missing value") == &"-1",
+                        strikeout: l.get(10).expect("missing value") == &"-1",
+                        scalex: l
+                            .get(11)
+                            .expect("Not provided ScaleX")
+                            .parse::<f32>()
+                            .expect("ScaleX value not proper"),
+                        scaley: l
+                            .get(12)
+                            .expect("Not provided ScaleY")
+                            .parse::<f32>()
+                            .expect("ScaleY value not proper"),
+                        spacing: l
+                            .get(13)
+                            .expect("Not provided Spacing")
+                            .parse::<f32>()
+                            .expect("Spacing value not proper"),
+                        angle: l
+                            .get(14)
+                            .expect("Not provided Spacing")
+                            .parse::<f32>()
+                            .expect("Spacing value not proper"),
+                        borderstyle: l
+                            .get(15)
+                            .expect("Not provided borderstyle")
+                            .parse::<i8>()
+                            .expect("borderstyle value not proper"),
+                        outline: l
+                            .get(16)
+                            .expect("Not provided Spacing")
+                            .parse::<f32>()
+                            .expect("Spacing value not proper"),
+                        shadow: l
+                            .get(17)
+                            .expect("Not provided Spacing")
+                            .parse::<f32>()
+                            .expect("Spacing value not proper"),
+                        alignment: Alignment::infer_from_str(
+                            l.get(18).expect("Not provided Spacing"),
+                        )
+                        .unwrap(),
+                        lmargin: l
+                            .get(19)
+                            .expect("Not provided lmargin")
+                            .parse::<i32>()
+                            .expect("lmargin value not proper"),
+                        rmargin: l
+                            .get(20)
+                            .expect("Not provided rmargin")
+                            .parse::<i32>()
+                            .expect("rmargin value not proper"),
+                        vmargin: l
+                            .get(21)
+                            .expect("Not provided vmargin")
+                            .parse::<i32>()
+                            .expect("vmargin value not proper"),
+                        alpha: 0,
+                        encoding: l
+                            .get(22)
+                            .expect("Not provided encoding")
+                            .parse::<i32>()
+                            .expect("encoding value not proper"),
+                        drawing: false,
+                    };
+                    sub.styles.push(styl);
+                }
+            }
+            if i.contains("[Script Info]") {
+                sub.info.clear();
+                for j in i.split("\r\n").collect::<Vec<&str>>().iter() {
+                    let line = j.split_once(':').unwrap_or(("", ""));
+                    sub.info
+                        .insert(line.0.to_string(), line.1.trim().to_string());
+                }
+                sub.info.remove("");
+                if !sub.info.contains_key("ScaledBorderAndShadows") {
+                    sub.info
+                        .insert("ScaledBorderAndShadows".to_string(), "yes".to_string());
+                }
+            }
+            if i.contains("[Events]") {
+                sub.events.clear();
+                for j in i.split("\r\n") {
+                    if j.starts_with("Dialogue:") {
+                        let mut ev = SSAEvent::default();
+                        let line = j
+                            .strip_prefix("Dialogue: ")
+                            .unwrap()
+                            .splitn(10, ',')
+                            .collect::<Vec<&str>>();
+                        ev.layer = line
+                            .first()
+                            .unwrap()
+                            .parse::<i32>()
+                            .expect("Failed to parse layer");
+                        ev.line_start = Time::from_str(line.get(1).unwrap()).unwrap();
+                        ev.line_end = Time::from_str(line.get(2).unwrap()).unwrap();
+                        ev.style = line.get(3).unwrap().to_string();
+                        ev.name = line.get(4).unwrap().to_string();
+                        ev.lmargin = line
+                            .get(5)
+                            .unwrap()
+                            .to_string()
+                            .parse::<f32>()
+                            .expect("couldn't conv to float");
+                        ev.rmargin = line
+                            .get(6)
+                            .unwrap()
+                            .to_string()
+                            .parse::<f32>()
+                            .expect("couldn't conv to float");
+                        ev.vmargin = line
+                            .get(7)
+                            .unwrap()
+                            .to_string()
+                            .parse::<f32>()
+                            .expect("couldn't conv to float");
+                        ev.effect = line.get(8).unwrap().to_string();
+                        ev.line_text = line.get(9).unwrap().to_string();
+                        sub.events.push(ev);
+                    }
+                }
+            }
+        }
+        Ok(sub)
     }
 }
 
