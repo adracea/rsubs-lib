@@ -18,11 +18,13 @@ jobs:
       publish: ${{steps.publish.outputs.publish}}
     steps:
     - uses: actions/checkout@v3
-    - name: Build
-      run: cargo build --verbose
     - name: Do we publish?
       id: publish
-      run: if (git show -- Cargo.toml | grep -q '+version') then echo 'publish=true';else echo 'publish=false'; fi >> $GITHUB_OUTPUT
+      run: |
+        if (git diff HEAD refs/remotes/origin/master | grep -q '+version') then echo 'publish=true';else echo 'publish=false'; fi >> $GITHUB_OUTPUT
+        echo $GITHUB_OUTPUT 
+    - name: Build
+      run: cargo build --verbose
   test:
     name: coverage
     runs-on: ubuntu-latest
