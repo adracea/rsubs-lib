@@ -3,13 +3,9 @@ name: CI
 on:
   push:
     branches: [ "master" ]
-  pull_request:
-    branches: [ "master" ]
-  workflow_dispatch:
-    inputs:
-      publish:
-        type: boolean
-        description: Publish?
+    paths-ignore:
+      - "/README.md"
+      - "/LICENSE"
 
 env:
   CARGO_TERM_COLOR: always
