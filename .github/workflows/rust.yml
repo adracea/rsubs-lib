@@ -22,7 +22,7 @@ jobs:
       run: cargo build --verbose
     - name: Do we publish?
       id: publish
-      run: if (git diff HEAD^ HEAD -- Cargo.toml | grep -q '+version') then echo 'publish=true';else echo 'publish=false'; fi >> $GITHUB_OUTPUT
+      run: if (git show -- Cargo.toml | grep -q '+version') then echo 'publish=true';else echo 'publish=false'; fi >> $GITHUB_OUTPUT
   test:
     name: coverage
     runs-on: ubuntu-latest
