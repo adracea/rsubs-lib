@@ -15,16 +15,15 @@ jobs:
 
     runs-on: ubuntu-latest
     outputs:
-      publish: ${{steps.publish.outputs.publish}}
+      publish: ${{ steps.build_pub.outputs.publish }}
     steps:
     - uses: actions/checkout@v3
-    - name: Do we publish?
-      id: publish
-      run: |
-        if (git diff HEAD refs/remotes/origin/master | grep -q '+version') then echo 'publish=true';else echo 'publish=false'; fi >> $GITHUB_OUTPUT
-        echo $GITHUB_OUTPUT 
     - name: Build
       run: cargo build --verbose
+    - name: Do we publish?
+      id: build_pub
+      run: |
+        if (git diff HEAD refs/remotes/origin/master | grep -q '+version') then echo 'publish=true';else echo 'publish=false'; fi >> $GITHUB_OUTPUT
   test:
     name: coverage
     runs-on: ubuntu-latest
@@ -46,7 +45,7 @@ jobs:
 
   publish:
     needs: build
-    if: ${{needs.build.outputs.publish}}
+    if: ${{ needs.build.outputs.publish=="true" }}
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
