@@ -7,13 +7,13 @@ use rsubs_lib::vtt;
 fn main() {
     vtt::VTTFile::from(srt::SRTFile::from_str("./tests/fixtures/test.srt").unwrap()) // Can read either a file or a string
         // converts file to WEBVTT
-        .to_file("./tests/fixtures/ex_test_1.vtt".to_string()) // Writes the converted subtitle to a file
+        .to_file("./tests/fixtures/ex_test_1.vtt") // Writes the converted subtitle to a file
         .unwrap();
     ssa::SSAFile::from(vtt::parse("./tests/fixtures/test.vtt".to_string()).unwrap()) // converts file to SSA/ASS
-        .to_file("./tests/fixtures/ex_test_1.ass".to_string())
+        .to_file("./tests/fixtures/ex_test_1.ass")
         .unwrap();
     srt::SRTFile::from(ssa::parse("./tests/fixtures/test.ass".to_string()).unwrap())
         // converts file to SRT
-        .to_file("./tests/fixtures/ex_test_1.srt".to_string())
+        .to_file("./tests/fixtures/ex_test_1.srt")
         .unwrap();
 }

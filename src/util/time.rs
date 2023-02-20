@@ -49,6 +49,7 @@ impl FromStr for Time {
             2 => {
                 t.h = 0;
                 t.m = splits.first().unwrap_or(&"0").to_string().parse::<u32>()?;
+                dbg!(splits.clone());
                 let sms = splits
                     .get(1)
                     .unwrap_or(&"0.0")
@@ -56,7 +57,7 @@ impl FromStr for Time {
                     .trim()
                     .parse::<f32>()
                     .unwrap();
-                let fms = format!("{0:.3}", sms);
+                let fms = format!("{sms:.3}");
                 let msf = fms.split('.').collect::<Vec<&str>>();
                 t.s = msf.first().unwrap_or(&"0").to_string().parse::<u32>()?;
                 t.ms = msf.get(1).unwrap_or(&"0").to_string().parse::<u32>()?;
@@ -71,12 +72,14 @@ impl FromStr for Time {
                     .trim()
                     .parse::<f32>()
                     .unwrap();
-                let fms = format!("{0:.3}", sms);
+                let fms = format!("{sms:.3}");
                 let msf = fms.split('.').collect::<Vec<&str>>();
                 t.s = msf.first().unwrap_or(&"0").to_string().parse::<u32>()?;
                 t.ms = msf.get(1).unwrap_or(&"0").to_string().parse::<u32>()?;
             }
-            _ => {}
+            _ => {
+                panic!("Bad Time")
+            }
         }
 
         Ok(t)
@@ -111,13 +114,13 @@ pub fn ms_to_timestring(ms: u32) -> String {
         .or(Some(&"0"))
         .expect("Should be good")
         .to_string();
-    format!("{:0>2}", hms)
+    format!("{hms:0>2}")
         + ":"
-        + &format!("{:0>2}", mms)
+        + &format!("{mms:0>2}")
         + ":"
-        + &format!("{:0>2}", sms)
+        + &format!("{sms:0>2}")
         + "."
-        + &format!("{:0>3}", mmmms)
+        + &format!("{mmmms:0>3}")
 }
 
 impl std::error::Error for Time {}

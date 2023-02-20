@@ -301,13 +301,13 @@ impl SSAFile {
     }
 
     /// Writes the SSAFile to a file specified by a path String.
-    pub fn to_file(self, path: String) -> std::io::Result<()> {
+    pub fn to_file(self, path: &str) -> std::io::Result<()> {
         let mut w = File::options()
             .create(true)
             .write(true)
             .open(path)
             .expect("File can't be created");
-        write!(w, "{}", self)?;
+        write!(w, "{self}")?;
         Ok(())
     }
 }
@@ -316,7 +316,7 @@ impl Display for SSAFile {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut str = "[Script Info]\r\n".to_string();
         for (i, j) in self.info.clone() {
-            str += &format!("{}: {}\r\n", i, j).to_string();
+            str += &format!("{i}: {j}\r\n").to_string();
         }
         str += "\r\n[V4+ Styles]\r\nFormat: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,Strikeout,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding\r\n";
         for i in self.styles.clone() {
@@ -406,7 +406,7 @@ impl Display for SSAFile {
                 + &i.line_text
                 + "\r\n");
         }
-        write!(f, "{}", str)
+        write!(f, "{str}")
     }
 }
 
@@ -416,19 +416,26 @@ impl FromStr for SSAFile {
         let path_or_content = s.to_string();
         let mut b: String = "".to_string();
         let mut sub: SSAFile = SSAFile::default();
-        if std::fs::read(&path_or_content).is_ok() {
-            let mut f = File::open(path_or_content)?;
-            f.read_to_string(&mut b)?;
+        if !path_or_content.contains('\n') {
+            if std::fs::read(&path_or_content).is_ok() {
+                let mut f = File::open(path_or_content)?;
+                f.read_to_string(&mut b)?;
+            }
         } else {
             b = path_or_content;
         }
-        let c: Vec<&str> = b.split("\r\n\r\n").collect();
+        let (split, ssplit) = if b.split("\r\n\r\n").count() < 2 {
+            ("\n\n", "\n")
+        } else {
+            ("\r\n\r\n", "\r\n")
+        };
+        let c: Vec<&str> = b.split(split).collect();
         for i in c {
             if i.contains("Styles]") {
                 sub.styles.clear();
                 let mut style: HashMap<String, Vec<&str>> = HashMap::new();
                 let keys = i
-                    .split("\r\n")
+                    .split(ssplit)
                     .filter(|x| x.starts_with("Format:"))
                     .collect::<String>();
                 let fmtheaders = keys.strip_prefix("Format: ").unwrap().replace(' ', "");
@@ -450,7 +457,7 @@ impl FromStr for SSAFile {
                     })
                     .collect::<Vec<&str>>();
                 let values2 = i
-                    .split("\r\n")
+                    .split(ssplit)
                     .filter(|&x| x.starts_with("Style: "))
                     .map(|x| x.strip_prefix("Style: ").unwrap().borrow())
                     .collect::<Vec<&str>>();
@@ -556,7 +563,7 @@ impl FromStr for SSAFile {
             }
             if i.contains("[Script Info]") {
                 sub.info.clear();
-                for j in i.split("\r\n").collect::<Vec<&str>>().iter() {
+                for j in i.split(ssplit).collect::<Vec<&str>>().iter() {
                     let line = j.split_once(':').unwrap_or(("", ""));
                     sub.info
                         .insert(line.0.to_string(), line.1.trim().to_string());
@@ -569,7 +576,7 @@ impl FromStr for SSAFile {
             }
             if i.contains("[Events]") {
                 sub.events.clear();
-                for j in i.split("\r\n") {
+                for j in i.split(ssplit) {
                     if j.starts_with("Dialogue:") {
                         let mut ev = SSAEvent::default();
                         let line = j
@@ -621,19 +628,26 @@ impl FromStr for SSAFile {
 pub fn parse(path_or_content: String) -> Result<SSAFile, std::io::Error> {
     let mut b: String = "".to_string();
     let mut sub: SSAFile = SSAFile::default();
-    if std::fs::read(&path_or_content).is_ok() {
-        let mut f = File::open(path_or_content)?;
-        f.read_to_string(&mut b)?;
+    if !path_or_content.contains('\n') {
+        if std::fs::read(&path_or_content).is_ok() {
+            let mut f = File::open(path_or_content)?;
+            f.read_to_string(&mut b)?;
+        }
     } else {
         b = path_or_content;
     }
-    let c: Vec<&str> = b.split("\r\n\r\n").collect();
+    let (split, ssplit) = if b.split("\r\n\r\n").count() < 2 {
+        ("\n\n", "\n")
+    } else {
+        ("\r\n\r\n", "\r\n")
+    };
+    let c: Vec<&str> = b.split(split).collect();
     for i in c {
         if i.contains("Styles]") {
             sub.styles.clear();
             let mut style: HashMap<String, Vec<&str>> = HashMap::new();
             let keys = i
-                .split("\r\n")
+                .split(ssplit)
                 .filter(|x| x.starts_with("Format:"))
                 .collect::<String>();
             let fmtheaders = keys.strip_prefix("Format: ").unwrap().replace(' ', "");
@@ -655,7 +669,7 @@ pub fn parse(path_or_content: String) -> Result<SSAFile, std::io::Error> {
                 })
                 .collect::<Vec<&str>>();
             let values2 = i
-                .split("\r\n")
+                .split(ssplit)
                 .filter(|&x| x.starts_with("Style: "))
                 .map(|x| x.strip_prefix("Style: ").unwrap().borrow())
                 .collect::<Vec<&str>>();
@@ -759,7 +773,7 @@ pub fn parse(path_or_content: String) -> Result<SSAFile, std::io::Error> {
         }
         if i.contains("[Script Info]") {
             sub.info.clear();
-            for j in i.split("\r\n").collect::<Vec<&str>>().iter() {
+            for j in i.split(ssplit).collect::<Vec<&str>>().iter() {
                 let line = j.split_once(':').unwrap_or(("", ""));
                 sub.info
                     .insert(line.0.to_string(), line.1.trim().to_string());
@@ -772,7 +786,7 @@ pub fn parse(path_or_content: String) -> Result<SSAFile, std::io::Error> {
         }
         if i.contains("[Events]") {
             sub.events.clear();
-            for j in i.split("\r\n") {
+            for j in i.split(ssplit) {
                 if j.starts_with("Dialogue:") {
                     let mut ev = SSAEvent::default();
                     let line = j

@@ -101,13 +101,13 @@ impl Default for VTTFile {
 
 impl VTTFile {
     /// Takes the path of the file in the form of a [String] to be written to as input.
-    pub fn to_file(self, path: String) -> std::io::Result<()> {
+    pub fn to_file(self, path: &str) -> std::io::Result<()> {
         let mut w = File::options()
             .write(true)
             .create(true)
             .open(path)
             .expect("File can't be created");
-        write!(w, "{}", self)?;
+        write!(w, "{self}")?;
         Ok(())
     }
 
@@ -155,7 +155,7 @@ impl VTTFile {
                 line_text: i.line_text.clone(),
                 ..Default::default()
             };
-            line.line_text = replace_invalid_lines(&i.line_text, false);
+            line.line_text = replace_invalid_lines(&i.line_text, false).replace("\\N", "\r\n");
             ssa.events.push(line);
         }
         ssa
@@ -218,7 +218,7 @@ impl Display for VTTFile {
             line_block += &(j.line_text.to_string().replace("\\N", "\r\n") + "\r\n\r\n");
             s.push_str(&line_block);
         }
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 /// Replaces strings that are invalid in certain contexts. SSA doesn't support html-like tags
@@ -256,13 +256,20 @@ impl FromStr for VTTFile {
         let path_or_content = s.to_string();
         let mut b: String = "".to_string();
         let mut sub: VTTFile = VTTFile::default();
-        if std::fs::read(&path_or_content).is_ok() {
-            let mut f = File::open(path_or_content).expect("Couldn't open file");
-            f.read_to_string(&mut b).expect("Couldn't read file");
+        if !path_or_content.contains('\n') {
+            if std::fs::read(&path_or_content).is_ok() {
+                let mut f = File::open(path_or_content)?;
+                f.read_to_string(&mut b)?;
+            }
         } else {
             b = path_or_content;
         }
-        let line_blocks = b.split("\r\n\r\n").collect::<Vec<&str>>();
+        let (split, ssplit) = if b.split("\r\n\r\n").count() < 2 {
+            ("\n\n", "\n")
+        } else {
+            ("\r\n\r\n", "\r\n")
+        };
+        let line_blocks = b.split(split).collect::<Vec<&str>>();
         // Unwrapping here is safe because the above split will always have `Some(&[""])`.
         if !line_blocks.first().unwrap().contains("WEBVTT") {
             panic!("Not a  WEBVTT file");
@@ -271,7 +278,7 @@ impl FromStr for VTTFile {
         let mut styles_found = 0;
         for i in line_blocks {
             if i.trim().starts_with("::cue") | i.trim().starts_with("STYLE") {
-                let line = i.split("\r\n").collect::<Vec<&str>>();
+                let line = i.split(ssplit).collect::<Vec<&str>>();
                 let mut styl = VTTStyle::default();
                 for i in line {
                     if i.starts_with("color:") {
@@ -344,7 +351,7 @@ impl FromStr for VTTFile {
                 continue;
             } else {
                 let mut subline = VTTLine::default();
-                let subsplit: Vec<&str> = i.split("\r\n").collect();
+                let subsplit: Vec<&str> = i.split(ssplit).collect();
                 if !subsplit
                     .first()
                     .expect("Failed to parse line number")
@@ -444,13 +451,20 @@ impl FromStr for VTTFile {
 pub fn parse(path_or_content: String) -> Result<VTTFile, std::io::Error> {
     let mut b: String = "".to_string();
     let mut sub: VTTFile = VTTFile::default();
-    if std::fs::read(&path_or_content).is_ok() {
-        let mut f = File::open(path_or_content).expect("Couldn't open file");
-        f.read_to_string(&mut b).expect("Couldn't read file");
+    if !path_or_content.contains('\n') {
+        if std::fs::read(&path_or_content).is_ok() {
+            let mut f = File::open(path_or_content)?;
+            f.read_to_string(&mut b)?;
+        }
     } else {
         b = path_or_content;
     }
-    let line_blocks = b.split("\r\n\r\n").collect::<Vec<&str>>();
+    let (split, ssplit) = if b.split("\r\n\r\n").count() < 2 {
+        ("\n\n", "\n")
+    } else {
+        ("\r\n\r\n", "\r\n")
+    };
+    let line_blocks = b.split(split).collect::<Vec<&str>>();
     // Unwrapping here is safe because the above split will always have `Some(&[""])`.
     if !line_blocks.first().unwrap().contains("WEBVTT") {
         panic!("Not a  WEBVTT file");
@@ -459,7 +473,7 @@ pub fn parse(path_or_content: String) -> Result<VTTFile, std::io::Error> {
     let mut styles_found = 0;
     for i in line_blocks {
         if i.trim().starts_with("::cue") | i.trim().starts_with("STYLE") {
-            let line = i.split("\r\n").collect::<Vec<&str>>();
+            let line = i.split(ssplit).collect::<Vec<&str>>();
             let mut styl = VTTStyle::default();
             for i in line {
                 if i.starts_with("color:") {
@@ -532,7 +546,7 @@ pub fn parse(path_or_content: String) -> Result<VTTFile, std::io::Error> {
             continue;
         } else {
             let mut subline = VTTLine::default();
-            let subsplit: Vec<&str> = i.split("\r\n").collect();
+            let subsplit: Vec<&str> = i.split(ssplit).collect();
             if !subsplit
                 .first()
                 .expect("Failed to parse line number")

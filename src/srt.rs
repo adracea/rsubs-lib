@@ -47,7 +47,7 @@ use super::vtt::VTTLine;
 /// println!("{}",a.clone());
 ///
 /// // and then write it to a file
-/// a.to_file("./tests/fixtures/doctest1.srt".to_string());
+/// a.to_file("./tests/fixtures/doctest1.srt");
 ///
 /// ```
 #[derive(Debug, Clone, PartialEq, Default, Eq, Serialize, Deserialize)]
@@ -109,13 +109,13 @@ impl SRTFile {
         vtt
     }
     /// Takes the path of the file in the form of a [String] to be written to as input.
-    pub fn to_file(self, path: String) -> std::io::Result<()> {
+    pub fn to_file(self, path: &str) -> std::io::Result<()> {
         let mut w = File::options()
             .write(true)
             .create(true)
             .open(path)
             .expect("File can't be created");
-        write!(w, "{}", self)?;
+        write!(w, "{self}")?;
         Ok(())
     }
 }
@@ -144,7 +144,7 @@ impl Display for SRTFile {
                 + "\r\n\r\n";
             lines += &line;
         }
-        write!(f, "{}", lines)
+        write!(f, "{lines}")
     }
 }
 
@@ -154,7 +154,7 @@ impl FromStr for SRTFile {
         let path_or_content = s.to_string();
         let mut b: String = "".to_string();
         let mut sub: SRTFile = SRTFile::default();
-        if !path_or_content.contains("\r\n") {
+        if !path_or_content.contains('\n') {
             if std::fs::read(&path_or_content).is_ok() {
                 let mut f = File::open(path_or_content).expect("Couldn't open file");
                 f.read_to_string(&mut b).expect("Couldn't read file");
@@ -162,10 +162,16 @@ impl FromStr for SRTFile {
         } else {
             b = path_or_content;
         }
-        let lines = b.split("\r\n\r\n").collect::<Vec<&str>>();
+
+        let (split, ssplit) = if b.split("\r\n\r\n").count() < 2 {
+            ("\n\n", "\n")
+        } else {
+            ("\r\n\r\n", "\r\n")
+        };
+        let lines = b.split(split).collect::<Vec<&str>>();
         for i in lines {
             let mut subline = SRTLine::default();
-            let subsplit: Vec<&str> = i.split("\r\n").collect();
+            let subsplit: Vec<&str> = i.split(ssplit).collect();
             if !subsplit
                 .first()
                 .expect("Failed to parse line number")
@@ -202,7 +208,7 @@ impl FromStr for SRTFile {
 pub fn parse(path_or_content: String) -> Result<SRTFile, std::io::Error> {
     let mut b: String = "".to_string();
     let mut sub: SRTFile = SRTFile::default();
-    if !path_or_content.contains("\r\n") {
+    if !path_or_content.contains('\n') {
         if std::fs::read(&path_or_content).is_ok() {
             let mut f = File::open(path_or_content).expect("Couldn't open file");
             f.read_to_string(&mut b).expect("Couldn't read file");
@@ -210,10 +216,16 @@ pub fn parse(path_or_content: String) -> Result<SRTFile, std::io::Error> {
     } else {
         b = path_or_content;
     }
-    let lines = b.split("\r\n\r\n").collect::<Vec<&str>>();
+
+    let (split, ssplit) = if b.split("\r\n\r\n").count() < 2 {
+        ("\n\n", "\n")
+    } else {
+        ("\r\n\r\n", "\r\n")
+    };
+    let lines = b.split(split).collect::<Vec<&str>>();
     for i in lines {
         let mut subline = SRTLine::default();
-        let subsplit: Vec<&str> = i.split("\r\n").collect();
+        let subsplit: Vec<&str> = i.split(ssplit).collect();
         if !subsplit
             .first()
             .expect("Failed to parse line number")

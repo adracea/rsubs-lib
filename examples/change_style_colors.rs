@@ -11,6 +11,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             style.firstcolor = ColorType::SSAColor(color::RED);
         }
     }
-    ssa.to_file("result.ass".to_string())?;
+    ssa.to_file("result.ass")?;
     Ok(())
 }
