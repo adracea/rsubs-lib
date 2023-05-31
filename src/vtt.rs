@@ -625,13 +625,21 @@ pub fn parse(path_or_content: String) -> Result<VTTFile, std::io::Error> {
                 });
                 for (px, py) in poss {
                     if px == "position" {
-                        spos.pos = py.replace('%', "").parse::<i32>().expect("number");
+                        let pos_split = py.replace('%', "").split(',').map(|s| s.to_owned()).collect::<Vec<String>>();
+                        spos.pos = pos_split.first().unwrap_or(&"".to_string()).to_string().parse::<i32>().expect("number");
+                        if pos_split.len() > 1 {
+                            spos.pos_align = Some(pos_split.get(1).unwrap_or(&"".to_string()).to_string());
+                        }
                     } else if px == "align" {
                         spos.align = py;
                     } else if px == "size" {
                         spos.size = py.replace('%', "").parse::<i32>().expect("number");
                     } else if px == "line" {
-                        spos.line = py.replace('%', "").parse::<i32>().expect("number");
+                        let line_split = py.replace('%', "").split(',').map(|s| s.to_owned()).collect::<Vec<String>>();
+                        spos.line = line_split.first().unwrap_or(&"".to_string()).to_string().parse::<i32>().expect("number");
+                        if line_split.len() > 1 {
+                            spos.line_align = Some(line_split.get(1).unwrap_or(&"".to_string()).to_string());
+                        }
                     }
                 }
                 subline.position = Some(spos);
