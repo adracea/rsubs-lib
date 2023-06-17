@@ -15,15 +15,15 @@ jobs:
 
     runs-on: ubuntu-latest
     outputs:
-      publish: ${{ steps.build_pub.outputs.publish }}
+      publish: ${{ steps.publish.outputs.publish }}
     steps:
     - uses: actions/checkout@v3
     - name: Build
       run: cargo build --verbose
     - name: Do we publish?
-      id: build_pub
+      id: publish
       run: |
-        if (git diff HEAD refs/remotes/origin/master | grep -q '+version') then echo 'publish=true';else echo 'publish=false'; fi >> $GITHUB_OUTPUT
+        if (git show -- Cargo.toml | grep -q '+version') then echo 'publish=true';else echo 'publish=false'; fi >> $GITHUB_OUTPUT
   test:
     name: coverage
     runs-on: ubuntu-latest
