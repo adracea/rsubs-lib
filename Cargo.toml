@@ -15,5 +15,5 @@ categories = ["encoding","parsing"]
 
 [dependencies]
 
-regex = "1.9"
+regex = "1.10"
 serde = {version="1.0", features = ["derive"]}
