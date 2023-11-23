@@ -2,7 +2,7 @@
 name = "rsubs-lib"
 edition = "2021"
 authors = ["Alex Dracea, adracea@gmail.com"]
-version = "0.1.9"
+version = "0.1.10"
 documentation = "https://docs.rs/rsubs-lib"
 description = "Pure Rust subtitle manipulation and conversion library."
 readme = "README.md"
