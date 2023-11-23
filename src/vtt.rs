@@ -269,15 +269,17 @@ impl FromStr for VTTFile {
             b = path_or_content;
         }
         let (split, ssplit) = if b.split("\r\n\r\n").count() < 2 {
-            ("\n\n", "\n")
+            (r"\n{2,}", "\n")
         } else {
-            ("\r\n\r\n", "\r\n")
+            (r"((\r\n){2,})", "\r\n")
         };
-        let line_blocks = b.split(split).collect::<Vec<&str>>();
+        let blank_line_sep = Regex::new(split).expect("Invalid blank line regex");
+        let line_blocks = blank_line_sep.split(&b).collect::<Vec<&str>>();
         // Unwrapping here is safe because the above split will always have `Some(&[""])`.
         if !line_blocks.first().unwrap().contains("WEBVTT") {
             panic!("Not a  WEBVTT file");
         }
+
         let mut line_found = false;
         let mut styles_found = 0;
         for i in line_blocks {

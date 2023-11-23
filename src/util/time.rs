@@ -49,7 +49,6 @@ impl FromStr for Time {
             2 => {
                 t.h = 0;
                 t.m = splits.first().unwrap_or(&"0").to_string().parse::<u32>()?;
-                dbg!(splits.clone());
                 let sms = splits
                     .get(1)
                     .unwrap_or(&"0.0")
