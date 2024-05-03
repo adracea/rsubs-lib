@@ -11,8 +11,9 @@ use std::fmt::Display;
 use std::fs::File;
 use std::io::Read;
 use std::io::Write;
-use std::str;
+use std::path::Path;
 use std::str::FromStr;
+use std::{fs, str};
 
 use super::ssa::{SSAEvent, SSAFile};
 use super::vtt::VTTFile;
@@ -31,15 +32,16 @@ use super::vtt::VTTLine;
 /// This is my second text
 /// ```
 ///
-/// The [parse] function takes as input a [String] that represents either the parsed file or the path to it.
+/// The [parse] function takes as input a [String] that represents the content of a `.srt` file.
+/// [parse_from_file] can be used to read content directly from a file.
 ///
 /// A simple example of working with this would be the following :
 ///
 ///
 /// ```
-/// use rsubs_lib::srt::parse;
+/// use rsubs_lib::srt::parse_from_file;
 ///
-/// let mut a = parse("./tests/fixtures/test.srt".to_string()).unwrap();
+/// let mut a = parse_from_file("./tests/fixtures/test.srt".to_string()).unwrap();
 /// for line in a.lines.iter_mut(){
 ///     line.line_text.push_str(" Ipsum"); // add "Ipsum" to the end of each line.
 /// }
@@ -109,7 +111,7 @@ impl SRTFile {
         vtt
     }
     /// Takes the path of the file in the form of a [String] to be written to as input.
-    pub fn to_file(self, path: &str) -> std::io::Result<()> {
+    pub fn to_file<P: AsRef<Path>>(self, path: P) -> std::io::Result<()> {
         let mut w = File::options()
             .write(true)
             .create(true)
@@ -202,27 +204,16 @@ impl FromStr for SRTFile {
     }
 }
 
-/// Parses the given [String] into a [SRTFile]
-///
-/// The string may represent either the path to a file or the file content itself.
-pub fn parse(path_or_content: String) -> Result<SRTFile, std::io::Error> {
-    let mut b: String = "".to_string();
+/// Parses the given [String] into a [SRTFile].
+pub fn parse(content: String) -> SRTFile {
     let mut sub: SRTFile = SRTFile::default();
-    if !path_or_content.contains('\n') {
-        if std::fs::read(&path_or_content).is_ok() {
-            let mut f = File::open(path_or_content).expect("Couldn't open file");
-            f.read_to_string(&mut b).expect("Couldn't read file");
-        }
-    } else {
-        b = path_or_content;
-    }
 
-    let (split, ssplit) = if b.split("\r\n\r\n").count() < 2 {
+    let (split, ssplit) = if content.split("\r\n\r\n").count() < 2 {
         ("\n\n", "\n")
     } else {
         ("\r\n\r\n", "\r\n")
     };
-    let lines = b.split(split).collect::<Vec<&str>>();
+    let lines = content.split(split).collect::<Vec<&str>>();
     for i in lines {
         let mut subline = SRTLine::default();
         let subsplit: Vec<&str> = i.split(ssplit).collect();
@@ -252,5 +243,10 @@ pub fn parse(path_or_content: String) -> Result<SRTFile, std::io::Error> {
             sub.lines.push(subline)
         }
     }
-    Ok(sub)
+    sub
+}
+
+/// Parses the given [Path] into a [SRTFile].
+pub fn parse_from_file<P: AsRef<Path>>(file: P) -> Result<SRTFile, std::io::Error> {
+    Ok(parse(fs::read_to_string(file)?))
 }

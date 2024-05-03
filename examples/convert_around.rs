@@ -9,10 +9,10 @@ fn main() {
         // converts file to WEBVTT
         .to_file("./tests/fixtures/ex_test_1.vtt") // Writes the converted subtitle to a file
         .unwrap();
-    ssa::SSAFile::from(vtt::parse("./tests/fixtures/test.vtt".to_string()).unwrap()) // converts file to SSA/ASS
+    ssa::SSAFile::from(vtt::parse_from_file("./tests/fixtures/test.vtt".to_string()).unwrap()) // converts file to SSA/ASS
         .to_file("./tests/fixtures/ex_test_1.ass")
         .unwrap();
-    srt::SRTFile::from(ssa::parse("./tests/fixtures/test.ass".to_string()).unwrap())
+    srt::SRTFile::from(ssa::parse_from_file("./tests/fixtures/test.ass".to_string()).unwrap())
         // converts file to SRT
         .to_file("./tests/fixtures/ex_test_1.srt")
         .unwrap();

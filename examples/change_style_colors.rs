@@ -4,7 +4,7 @@ use rsubs_lib::util::color;
 use rsubs_lib::util::color::ColorType;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut ssa = rsubs_lib::ssa::parse("tests/fixtures/test.ass".to_string())
+    let mut ssa = rsubs_lib::ssa::parse_from_file("tests/fixtures/test.ass".to_string())
         .expect("Encountered Error parsing file");
     for style in ssa.styles.iter_mut() {
         if style.name == "Default" {

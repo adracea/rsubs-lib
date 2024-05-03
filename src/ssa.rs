@@ -7,6 +7,7 @@ use std::{
     borrow::Borrow,
     collections::HashMap,
     fmt::Display,
+    fs,
     io::{Read, Write},
     str::FromStr,
 };
@@ -18,6 +19,7 @@ use crate::util::{
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
+use std::path::Path;
 
 use super::srt::SRTLine;
 use super::{srt::SRTFile, vtt::VTTFile, vtt::VTTLine, vtt::VTTStyle};
@@ -301,7 +303,7 @@ impl SSAFile {
     }
 
     /// Writes the SSAFile to a file specified by a path String.
-    pub fn to_file(self, path: &str) -> std::io::Result<()> {
+    pub fn to_file<P: AsRef<Path>>(self, path: P) -> std::io::Result<()> {
         let mut w = File::options()
             .create(true)
             .write(true)
@@ -622,26 +624,15 @@ impl FromStr for SSAFile {
     }
 }
 
-/// Parses the given [String] into a [SRTFile]
-///
-/// The string may represent either the path to a file or the file content itself.
-pub fn parse(path_or_content: String) -> Result<SSAFile, std::io::Error> {
-    let mut b: String = "".to_string();
+/// Parses the given [String] into a [SSAFile].
+pub fn parse(content: String) -> SSAFile {
     let mut sub: SSAFile = SSAFile::default();
-    if !path_or_content.contains('\n') {
-        if std::fs::read(&path_or_content).is_ok() {
-            let mut f = File::open(path_or_content)?;
-            f.read_to_string(&mut b)?;
-        }
-    } else {
-        b = path_or_content;
-    }
-    let (split, ssplit) = if b.split("\r\n\r\n").count() < 2 {
+    let (split, ssplit) = if content.split("\r\n\r\n").count() < 2 {
         ("\n\n", "\n")
     } else {
         ("\r\n\r\n", "\r\n")
     };
-    let c: Vec<&str> = b.split(split).collect();
+    let c: Vec<&str> = content.split(split).collect();
     for i in c {
         if i.contains("Styles]") {
             sub.styles.clear();
@@ -828,5 +819,10 @@ pub fn parse(path_or_content: String) -> Result<SSAFile, std::io::Error> {
             }
         }
     }
-    Ok(sub)
+    sub
+}
+
+/// Parses the given [Path] into a [SSAFile].
+pub fn parse_from_file<P: AsRef<Path>>(file: P) -> Result<SSAFile, std::io::Error> {
+    Ok(parse(fs::read_to_string(file)?))
 }

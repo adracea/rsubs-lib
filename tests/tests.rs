@@ -19,7 +19,7 @@ mod tests {
     #[test]
     fn test_ssa_from_file_to_srt_file() {
         use rsubs_lib::ssa;
-        let ssafile = ssa::parse("./tests/fixtures/test.ass".to_string()).unwrap();
+        let ssafile = ssa::parse_from_file("./tests/fixtures/test.ass".to_string()).unwrap();
         ssafile
             .to_srt()
             .to_file("./tests/fixtures/res6.srt")
@@ -28,7 +28,7 @@ mod tests {
     #[test]
     fn test_ssa_from_file_to_vtt_file() {
         use rsubs_lib::ssa;
-        let ssafile = ssa::parse("./tests/fixtures/test.ass".to_string()).unwrap();
+        let ssafile = ssa::parse_from_file("./tests/fixtures/test.ass".to_string()).unwrap();
         ssafile
             .to_vtt()
             .to_file("./tests/fixtures/res5.vtt")
@@ -37,7 +37,7 @@ mod tests {
     #[test]
     fn test_ssa_from_file_to_ass_file() {
         use rsubs_lib::ssa;
-        let ssafile = ssa::parse("./tests/fixtures/test.ass".to_string()).unwrap();
+        let ssafile = ssa::parse_from_file("./tests/fixtures/test.ass".to_string()).unwrap();
         ssafile
             .to_file("./tests/fixtures/res4.ass")
             .expect("Couldn't write");
@@ -45,7 +45,7 @@ mod tests {
     #[test]
     fn test_srt_from_file_to_ass_file() {
         use rsubs_lib::srt;
-        let ssafile = srt::parse("./tests/fixtures/test.srt".to_string()).unwrap();
+        let ssafile = srt::parse_from_file("./tests/fixtures/test.srt".to_string()).unwrap();
         ssafile
             .to_ass()
             .to_file("./tests/fixtures/res3.ass")
@@ -54,7 +54,7 @@ mod tests {
     #[test]
     fn test_srt_from_file_to_vtt_file() {
         use rsubs_lib::srt;
-        let ssafile = srt::parse("./tests/fixtures/test.srt".to_string()).unwrap();
+        let ssafile = srt::parse_from_file("./tests/fixtures/test.srt".to_string()).unwrap();
         ssafile
             .to_vtt()
             .to_file("./tests/fixtures/res2.vtt")
@@ -78,7 +78,7 @@ mod tests {
             .expect("WrongFile")
             .read_to_string(file_value)
             .expect("Couldn't write");
-        let ssafile = ssa::parse(file_value.to_string()).unwrap();
+        let ssafile = ssa::parse(file_value.to_string());
         ssafile
             .to_srt()
             .to_file("./tests/fixtures/res7.srt")
@@ -87,13 +87,13 @@ mod tests {
     #[test]
     fn test_srt_from_file_to_srt_file() {
         use rsubs_lib::srt;
-        let srtfile = srt::parse("./tests/fixtures/test.srt".to_string()).unwrap();
+        let srtfile = srt::parse_from_file("./tests/fixtures/test.srt".to_string()).unwrap();
         srtfile.to_file("./tests/fixtures/res8.srt").unwrap();
     }
     #[test]
     fn test_srt_from_file_to_srt_file2() {
         use rsubs_lib::srt;
-        srt::parse("./tests/fixtures/test.srt".to_string())
+        srt::parse_from_file("./tests/fixtures/test.srt".to_string())
             .unwrap()
             .to_vtt()
             .to_file("./tests/fixtures/res14.srt")
@@ -158,7 +158,7 @@ You know I’m so excited my glasses are falling off here.
         "
         .to_string();
         let mut srt = rsubs_lib::srt::SRTFile::from_str(&fi).unwrap();
-        let srt2 = rsubs_lib::srt::parse(fi).unwrap();
+        let srt2 = rsubs_lib::srt::parse(fi);
         for line in srt.lines.iter_mut() {
             line.line_end += 1000;
             line.line_start += 1000;
@@ -311,7 +311,7 @@ Dialogue: 0,0:00:02.20,0:00:04.20,Default,,0000,0000,0000,,{\c1}Lorem Ipsum2{\c0
         let _sub10: VTTFile = Subtitle::from_str(fi).unwrap().into();
         let _sub11 = Subtitle::from_str(fi2).unwrap().to_string();
         let _sub11 = Subtitle::from_str(fi3).unwrap().to_string();
-        let _sub12 = rsubs_lib::ssa::parse(fi3.replace("\r\n", "\n")).unwrap();
+        let _sub12 = rsubs_lib::ssa::parse(fi3.replace("\r\n", "\n"));
         assert!(sub2.to_string().contains("We are in New York City"));
         assert!(sub3.to_string().contains("We are in New York City"));
         assert!(sub4.to_string().contains("We are in New York City"));
@@ -432,54 +432,16 @@ font-family: "Arial", sans-serif;
     }
     #[test]
     fn test_time_2() {
-        use rsubs_lib::util::time;
         let timestr = vec!["00:00:20.000", "00:01:20.011", "0:00:05,100", "00:20,40"];
         for (ctr, i) in timestr.iter().enumerate() {
             match ctr {
-                0 => assert_eq!(
-                    Time {
-                        h: 0,
-                        m: 0,
-                        s: 20,
-                        ms: 0,
-                        frames: 0,
-                        fps: 0.0,
-                    },
-                    Time::from_str(i).unwrap()
-                ),
+                0 => assert_eq!(Time::from_ms(20 * 1000), Time::from_str(i).unwrap()),
                 1 => assert_eq!(
-                    Time {
-                        h: 0,
-                        m: 1,
-                        s: 20,
-                        ms: 11,
-                        frames: 0,
-                        fps: 0.0,
-                    },
+                    Time::from_ms(1 * 60 * 1000 + 20 * 1000 + 11),
                     Time::from_str(i).unwrap()
                 ),
-                2 => assert_eq!(
-                    Time {
-                        h: 0,
-                        m: 0,
-                        s: 5,
-                        ms: 100,
-                        frames: 0,
-                        fps: 0.0,
-                    },
-                    Time::from_str(i).unwrap()
-                ),
-                3 => assert_eq!(
-                    Time {
-                        h: 0,
-                        m: 0,
-                        s: 20,
-                        ms: 400,
-                        frames: 0,
-                        fps: 0.0,
-                    },
-                    Time::from_str(i).unwrap()
-                ),
+                2 => assert_eq!(Time::from_ms(5 * 1000 + 100), Time::from_str(i).unwrap()),
+                3 => assert_eq!(Time::from_ms(20 * 1000 + 400), Time::from_str(i).unwrap()),
                 _ => todo!(),
             }
         }
@@ -500,20 +462,15 @@ font-family: "Arial", sans-serif;
         assert_eq!(tr.total_ms(), 0_u32);
         tr += 22000;
         let a: &mut Time = &mut tr;
-        let b = a + 100;
+        let b: &mut Time = a + 100;
         let mut d: &mut Time = &mut Time::default();
         println!("{b}");
         assert_eq!(b.clone().to_srt_string(), "00:00:22,100".to_string());
-        assert_eq!(&mut b.clone() - 100000, d);
-        assert_eq!(b - 100000_u32, d);
         d.set_fps(27.9);
-        assert_eq!(d.fps, 27.9);
-        assert_eq!(d.frames, 0);
+        assert_eq!(d.fps(), 27.9);
+        assert_eq!(d.frames(), 0);
         d = d + 10000;
-        d.derive_frames();
-        assert_eq!(d.frames, 279);
-        d.update_from_fps_frames().unwrap();
-        assert_eq!(time::frames_to_ms(23, 0.0), 0);
+        assert_eq!(d.frames(), 279);
     }
 
     #[test]
@@ -521,14 +478,14 @@ font-family: "Arial", sans-serif;
         use rsubs_lib::srt;
         use std::fs::File;
         use std::io::Read;
-        srt::parse("./tests/fixtures/test.srt".to_string())
+        srt::parse_from_file("./tests/fixtures/test.srt".to_string())
             .unwrap()
             .to_vtt()
             .to_ass()
             .to_srt()
             .to_file("./tests/fixtures/res15.srt")
             .unwrap();
-        let _file_value = srt::parse("./tests/fixtures/test.srt".to_string()).unwrap();
+        let _file_value = srt::parse_from_file("./tests/fixtures/test.srt".to_string()).unwrap();
         let file_value2: &mut String = &mut "".to_string();
         File::open("./tests/fixtures/res15.srt")
             .expect("WrongFile")
@@ -546,7 +503,7 @@ font-family: "Arial", sans-serif;
             .expect("WrongFile")
             .read_to_string(file_value)
             .expect("Couldn't write");
-        let srtfile = srt::parse(file_value.to_string()).unwrap();
+        let srtfile = srt::parse(file_value.to_string());
         srtfile.to_file("./tests/fixtures/res9.srt").unwrap();
     }
     #[test]
@@ -559,7 +516,7 @@ font-family: "Arial", sans-serif;
             .expect("WrongFile")
             .read_to_string(file_valuex)
             .expect("Couldn't write");
-        let srtfile1 = srt::parse(file_valuex.to_string()).unwrap();
+        let srtfile1 = srt::parse(file_valuex.to_string());
         srtfile1.to_file("./tests/fixtures/res13.srt").unwrap();
         let file_value: &mut String = &mut "".to_string();
         File::open("./tests/fixtures/res13.srt")
@@ -571,7 +528,7 @@ font-family: "Arial", sans-serif;
             .expect("WrongFile")
             .read_to_string(file_value2)
             .expect("Couldn't write");
-        let srtfile = srt::parse(file_value.to_string()).unwrap();
+        let srtfile = srt::parse(file_value.to_string());
         assert_eq!(file_value.to_string(), format!("{srtfile}"));
     }
     #[test]
@@ -585,7 +542,7 @@ font-family: "Arial", sans-serif;
             .expect("WrongFile")
             .read_to_string(file_value)
             .expect("Couldn't write");
-        let _vttfile: VTTFile = vtt::parse(file_value.to_owned()).unwrap();
+        let _vttfile: VTTFile = vtt::parse(file_value.to_owned());
     }
     #[test]
     fn test_parse_vtt_write_to_vtt() {
@@ -598,7 +555,6 @@ font-family: "Arial", sans-serif;
             .read_to_string(file_value)
             .expect("Couldn't write");
         vtt::parse(file_value.to_owned())
-            .unwrap()
             .to_file("./tests/fixtures/res10.vtt")
             .expect("Ok");
     }
@@ -613,7 +569,6 @@ font-family: "Arial", sans-serif;
             .read_to_string(file_value)
             .expect("Couldn't write");
         vtt::parse(file_value.to_owned())
-            .unwrap()
             .to_ass()
             .to_file("./tests/fixtures/res11.ass")
             .expect("Ok");
@@ -629,7 +584,6 @@ font-family: "Arial", sans-serif;
             .read_to_string(file_value)
             .expect("Couldn't write");
         vtt::parse(file_value.to_owned())
-            .unwrap()
             .to_srt()
             .to_file("./tests/fixtures/res12.srt")
             .expect("Ok");
@@ -637,7 +591,7 @@ font-family: "Arial", sans-serif;
     #[test]
     fn test_parse_vtt_from_file_to_srt() {
         use rsubs_lib::vtt;
-        vtt::parse("./tests/fixtures/test.vtt".to_owned())
+        vtt::parse_from_file("./tests/fixtures/test.vtt".to_owned())
             .unwrap()
             .to_srt()
             .to_file("./tests/fixtures/res16.srt")
@@ -647,7 +601,7 @@ font-family: "Arial", sans-serif;
     #[should_panic]
     fn test_parse_vtt_from_file_to_srt_panic() {
         use rsubs_lib::vtt;
-        vtt::parse("./tests/fixtures/test.srt".to_owned())
+        vtt::parse_from_file("./tests/fixtures/test.srt".to_owned())
             .unwrap()
             .to_srt()
             .to_file("./tests/fixtures/res12.srt")
@@ -657,7 +611,7 @@ font-family: "Arial", sans-serif;
     #[should_panic]
     fn test_parse_vtt_from_empty_to_srt_panic() {
         use rsubs_lib::vtt;
-        vtt::parse("".to_owned())
+        vtt::parse_from_file("".to_owned())
             .unwrap()
             .to_srt()
             .to_file("./tests/fixtures/res_panic1.srt")
