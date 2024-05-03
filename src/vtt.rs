@@ -13,8 +13,10 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::fmt::Display;
+use std::fs;
 use std::fs::File;
 use std::io::{Read, Write};
+use std::path::Path;
 use std::str::FromStr;
 
 /// The VTTStyle contains information that generally composes the `::cue` header
@@ -105,7 +107,7 @@ impl Default for VTTFile {
 
 impl VTTFile {
     /// Takes the path of the file in the form of a [String] to be written to as input.
-    pub fn to_file(self, path: &str) -> std::io::Result<()> {
+    pub fn to_file<P: AsRef<Path>>(self, path: P) -> std::io::Result<()> {
         let mut w = File::options()
             .write(true)
             .create(true)
@@ -424,20 +426,40 @@ impl FromStr for VTTFile {
                     });
                     for (px, py) in poss {
                         if px == "position" {
-                            let pos_split = py.replace('%', "").split(',').map(|s| s.to_owned()).collect::<Vec<String>>();
-                            spos.pos = pos_split.first().unwrap_or(&"".to_string()).to_string().parse::<i32>().expect("number");
+                            let pos_split = py
+                                .replace('%', "")
+                                .split(',')
+                                .map(|s| s.to_owned())
+                                .collect::<Vec<String>>();
+                            spos.pos = pos_split
+                                .first()
+                                .unwrap_or(&"".to_string())
+                                .to_string()
+                                .parse::<i32>()
+                                .expect("number");
                             if pos_split.len() > 1 {
-                                spos.pos_align = Some(pos_split.get(1).unwrap_or(&"".to_string()).to_string());
+                                spos.pos_align =
+                                    Some(pos_split.get(1).unwrap_or(&"".to_string()).to_string());
                             }
                         } else if px == "align" {
                             spos.align = py;
                         } else if px == "size" {
                             spos.size = py.replace('%', "").parse::<i32>().expect("number");
                         } else if px == "line" {
-                            let line_split = py.replace('%', "").split(',').map(|s| s.to_owned()).collect::<Vec<String>>();
-                            spos.line = line_split.first().unwrap_or(&"".to_string()).to_string().parse::<i32>().expect("number");
+                            let line_split = py
+                                .replace('%', "")
+                                .split(',')
+                                .map(|s| s.to_owned())
+                                .collect::<Vec<String>>();
+                            spos.line = line_split
+                                .first()
+                                .unwrap_or(&"".to_string())
+                                .to_string()
+                                .parse::<i32>()
+                                .expect("number");
                             if line_split.len() > 1 {
-                                spos.line_align = Some(line_split.get(1).unwrap_or(&"".to_string()).to_string());
+                                spos.line_align =
+                                    Some(line_split.get(1).unwrap_or(&"".to_string()).to_string());
                             }
                         }
                     }
@@ -459,26 +481,15 @@ impl FromStr for VTTFile {
     }
 }
 
-/// Parses the given [String] into a [VTTFile]
-///
-/// The string may represent either the path to a file or the file content itself.
-pub fn parse(path_or_content: String) -> Result<VTTFile, std::io::Error> {
-    let mut b: String = "".to_string();
+/// Parses the given [String] into a [VTTFile].
+pub fn parse(content: String) -> VTTFile {
     let mut sub: VTTFile = VTTFile::default();
-    if !path_or_content.contains('\n') {
-        if std::fs::read(&path_or_content).is_ok() {
-            let mut f = File::open(path_or_content)?;
-            f.read_to_string(&mut b)?;
-        }
-    } else {
-        b = path_or_content;
-    }
-    let (split, ssplit) = if b.split("\r\n\r\n").count() < 2 {
+    let (split, ssplit) = if content.split("\r\n\r\n").count() < 2 {
         ("\n\n", "\n")
     } else {
         ("\r\n\r\n", "\r\n")
     };
-    let line_blocks = b.split(split).collect::<Vec<&str>>();
+    let line_blocks = content.split(split).collect::<Vec<&str>>();
     // Unwrapping here is safe because the above split will always have `Some(&[""])`.
     if !line_blocks.first().unwrap().contains("WEBVTT") {
         panic!("Not a  WEBVTT file");
@@ -627,20 +638,40 @@ pub fn parse(path_or_content: String) -> Result<VTTFile, std::io::Error> {
                 });
                 for (px, py) in poss {
                     if px == "position" {
-                        let pos_split = py.replace('%', "").split(',').map(|s| s.to_owned()).collect::<Vec<String>>();
-                        spos.pos = pos_split.first().unwrap_or(&"".to_string()).to_string().parse::<i32>().expect("number");
+                        let pos_split = py
+                            .replace('%', "")
+                            .split(',')
+                            .map(|s| s.to_owned())
+                            .collect::<Vec<String>>();
+                        spos.pos = pos_split
+                            .first()
+                            .unwrap_or(&"".to_string())
+                            .to_string()
+                            .parse::<i32>()
+                            .expect("number");
                         if pos_split.len() > 1 {
-                            spos.pos_align = Some(pos_split.get(1).unwrap_or(&"".to_string()).to_string());
+                            spos.pos_align =
+                                Some(pos_split.get(1).unwrap_or(&"".to_string()).to_string());
                         }
                     } else if px == "align" {
                         spos.align = py;
                     } else if px == "size" {
                         spos.size = py.replace('%', "").parse::<i32>().expect("number");
                     } else if px == "line" {
-                        let line_split = py.replace('%', "").split(',').map(|s| s.to_owned()).collect::<Vec<String>>();
-                        spos.line = line_split.first().unwrap_or(&"".to_string()).to_string().parse::<i32>().expect("number");
+                        let line_split = py
+                            .replace('%', "")
+                            .split(',')
+                            .map(|s| s.to_owned())
+                            .collect::<Vec<String>>();
+                        spos.line = line_split
+                            .first()
+                            .unwrap_or(&"".to_string())
+                            .to_string()
+                            .parse::<i32>()
+                            .expect("number");
                         if line_split.len() > 1 {
-                            spos.line_align = Some(line_split.get(1).unwrap_or(&"".to_string()).to_string());
+                            spos.line_align =
+                                Some(line_split.get(1).unwrap_or(&"".to_string()).to_string());
                         }
                     }
                 }
@@ -658,5 +689,10 @@ pub fn parse(path_or_content: String) -> Result<VTTFile, std::io::Error> {
             }
         }
     }
-    Ok(sub)
+    sub
+}
+
+/// Parses the given [Path] into a [VTTFile].
+pub fn parse_from_file<P: AsRef<Path>>(file: P) -> Result<VTTFile, std::io::Error> {
+    Ok(parse(fs::read_to_string(file)?))
 }
