@@ -20,17 +20,17 @@ use rsubs_lib::Subtitle;
 use std::str::FromStr;
 
 fn main() {
-    srt::parse("./tests/fixtures/test.srt".to_string())
+    srt::parse_from_file("./tests/fixtures/test.srt".to_string())
         .unwrap() // Can read either a file or a string
         .to_vtt() // converts file to WEBVTT
         .to_file("./tests/fixtures/test_1.vtt") // Writes the converted subtitle to a file
         .unwrap();
-    vtt::parse("./tests/fixtures/test.vtt")
+    vtt::parse_from_file("./tests/fixtures/test.vtt")
         .unwrap()
         .to_ass() // converts file to SSA/ASS
         .to_file("./tests/fixtures/test_1.ass")
         .unwrap();
-    ssa::parse("./tests/fixtures/test.ass".to_string())
+    ssa::parse_from_file("./tests/fixtures/test.ass".to_string())
         .unwrap()
         .to_srt() // converts file to SRT
         .to_file("./tests/fixtures/test_1.srt")
