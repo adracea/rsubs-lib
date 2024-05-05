@@ -338,23 +338,23 @@ impl Display for SSAFile {
                 + &i.backgroundcolor.to_string()
                 + ","
                 + &i.bold
-                    .then(|| "0".to_string())
-                    .or_else(|| Some("-1".to_string()))
+                    .then(|| "-1".to_string())
+                    .or_else(|| Some("0".to_string()))
                     .expect("Proper")
                 + ","
                 + &i.italic
-                    .then(|| "0".to_string())
-                    .or_else(|| Some("-1".to_string()))
+                    .then(|| "-1".to_string())
+                    .or_else(|| Some("0".to_string()))
                     .expect("Proper")
                 + ","
                 + &i.unerline
-                    .then(|| "0".to_string())
-                    .or_else(|| Some("-1".to_string()))
+                    .then(|| "-1".to_string())
+                    .or_else(|| Some("0".to_string()))
                     .expect("Proper")
                 + ","
                 + &i.strikeout
-                    .then(|| "0".to_string())
-                    .or_else(|| Some("-1".to_string()))
+                    .then(|| "-1".to_string())
+                    .or_else(|| Some("0".to_string()))
                     .expect("Proper")
                 + ","
                 + &(i.scalex as i32).to_string()
