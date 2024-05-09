@@ -41,7 +41,7 @@ pub struct SSAStyle {
     pub backgroundcolor: color::ColorType,
     pub bold: bool,
     pub italic: bool,
-    pub unerline: bool,
+    pub underline: bool,
     pub strikeout: bool,
     pub scalex: f32,
     pub scaley: f32,
@@ -71,7 +71,7 @@ impl Default for SSAStyle {
             backgroundcolor: color::ColorType::SSAColor(color::TRANSPARENT),
             bold: false,
             italic: true,
-            unerline: true,
+            underline: true,
             strikeout: true,
             scalex: 120.0,
             scaley: 120.0,
@@ -347,7 +347,7 @@ impl Display for SSAFile {
                     .or_else(|| Some("0".to_string()))
                     .expect("Proper")
                 + ","
-                + &i.unerline
+                + &i.underline
                     .then(|| "-1".to_string())
                     .or_else(|| Some("0".to_string()))
                     .expect("Proper")
@@ -496,7 +496,7 @@ impl FromStr for SSAFile {
                         ),
                         bold: l.get(7).expect("missing value") == &"-1",
                         italic: l.get(8).expect("missing value") == &"-1",
-                        unerline: l.get(9).expect("missing value") == &"-1",
+                        underline: l.get(9).expect("missing value") == &"-1",
                         strikeout: l.get(10).expect("missing value") == &"-1",
                         scalex: l
                             .get(11)
@@ -697,7 +697,7 @@ pub fn parse(content: String) -> SSAFile {
                     ),
                     bold: l.get(7).expect("missing value") == &"-1",
                     italic: l.get(8).expect("missing value") == &"-1",
-                    unerline: l.get(9).expect("missing value") == &"-1",
+                    underline: l.get(9).expect("missing value") == &"-1",
                     strikeout: l.get(10).expect("missing value") == &"-1",
                     scalex: l
                         .get(11)
