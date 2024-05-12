@@ -7,7 +7,7 @@ use regex::Regex;
 use std::collections::HashMap;
 use std::fmt::Display;
 
-use crate::util::{Alignment, TRANSPARENT, WHITE};
+use crate::util::{Alignment, BLACK, TRANSPARENT, WHITE};
 use serde::{Deserialize, Serialize};
 
 use crate::error;
@@ -146,7 +146,7 @@ impl Default for SSAStyle {
             fontname: "Trebuchet MS".to_string(),
             fontsize: 25.5,
             primary_color: WHITE,
-            secondary_color: TRANSPARENT,
+            secondary_color: BLACK,
             outline_color: TRANSPARENT,
             back_color: TRANSPARENT,
             bold: false,

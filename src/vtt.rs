@@ -266,7 +266,7 @@ impl VTT {
     }
     /// SRT is basically a VTT without the styles
     pub fn to_srt(&self) -> SRT {
-        let speaker_regex: Regex = Regex::new(r"(?m)^<v.*>").unwrap();
+        let speaker_regex: Regex = Regex::new(r"(?m)^<v.*?>").unwrap();
 
         let mut lines = vec![];
 
@@ -570,7 +570,7 @@ mod parse {
                         kind: VTTErrorKind::Parse("delimiter ':' missing".to_string()),
                     });
                 };
-                entries.insert(name.to_string(), value.to_string());
+                entries.insert(name.trim().to_string(), value.trim().to_string());
             }
         }
 
