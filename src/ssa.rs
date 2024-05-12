@@ -3,92 +3,177 @@
 //! It describes the [SSAFile], [SSAEvent] and [SSAStyle] structs and
 //! provides the [parse] function.
 
-use std::{
-    borrow::Borrow,
-    collections::HashMap,
-    fmt::Display,
-    fs,
-    io::{Read, Write},
-    str::FromStr,
-};
-
-use crate::util::{
-    color::{self, Alignment, Color},
-    time::Time,
-};
 use regex::Regex;
-use serde::{Deserialize, Serialize};
-use std::fs::File;
-use std::path::Path;
+use std::collections::HashMap;
+use std::fmt::Display;
 
-use super::srt::SRTLine;
-use super::{srt::SRTFile, vtt::VTTFile, vtt::VTTLine, vtt::VTTStyle};
+use crate::util::{Alignment, TRANSPARENT, WHITE};
+use serde::{Deserialize, Serialize};
+
+use crate::error;
+use crate::ssa::parse::TIME_FORMAT;
+use crate::util::Color;
+use crate::vtt::VTT;
+use time::Time;
+
+use super::srt::{SRTLine, SRT};
+
+/// [SSAInfo] contains headers and general information about the script.
+#[derive(Clone, Debug, Default, PartialEq, Deserialize, Serialize)]
+pub struct SSAInfo {
+    /// Description of the script.
+    pub title: Option<String>,
+    /// Original author(s) of the script.
+    pub original_script: Option<String>,
+    /// Original translator of the dialogue.
+    pub original_translation: Option<String>,
+    /// Original script editor(s).
+    pub original_editing: Option<String>,
+    /// Whoever timed the original script
+    pub original_timing: Option<String>,
+    /// Description of where in the video the script should begin playback.
+    pub synch_point: Option<f32>,
+    /// Names of any other subtitling groups who edited the original script.
+    pub script_update_by: Option<String>,
+    /// The details of any updates to the original script - made by other subtitling groups
+    pub update_details: Option<String>,
+    /// The SSA script format version.
+    pub script_type: Option<String>,
+    /// Determines how subtitles are moved, when automatically preventing onscreen collisions.
+    /// Allowed values:
+    /// - `Normal`: SSA will attempt to position subtitles in the position specified by the
+    ///   "margins". However, subtitles can be shifted vertically to prevent onscreen collisions.
+    ///   With "normal" collision prevention, the subtitles will "stack up" one above the other -
+    ///   but they will always be positioned as close the vertical (bottom) margin as possible -
+    ///   filling in "gaps" in other subtitles if one large enough is available.
+    /// - `Reverse`: Subtitles will be shifted upwards to make room for subsequent overlapping
+    ///   subtitles. This means the subtitles can nearly always be read top-down - but it also means
+    ///   that the first subtitle can appear halfway up the screen before the subsequent overlapping
+    ///   subtitles appear. It can use a lot of screen area.
+    pub collisions: Option<String>,
+    /// The height of the screen used by the script's author(s) when playing the script.
+    pub play_res_y: Option<u32>,
+    /// The width of the screen used by the script's author(s) when playing the script.
+    pub play_res_x: Option<u32>,
+    /// The color depth used by the script's author(s) when playing the script.
+    pub play_depth: Option<u32>,
+    /// The Timer Speed for the script, as percentage. So `100` == `100%`.
+    pub timer: Option<f32>,
+    /// Defines the default wrapping style.
+    /// Allowed values are:
+    /// - `0`: smart wrapping, lines are evenly broken
+    /// - `1`: end-of-line word wrapping, only \N breaks
+    /// - `2`: no word wrapping, \n \N both breaks
+    /// - `3`: same as 0, but lower line gets wider
+    pub wrap_style: Option<u8>,
+
+    /// Additional fields that aren't covered by the ASS spec.
+    pub additional_fields: HashMap<String, String>,
+}
+impl Eq for SSAInfo {}
 
 /// [SSAStyle] describes each part of the `Format: ` side of a `.ssa` or `.ass` subtitle.
-///
-/// It holds [color::ColorType] for handling colors and exposes parameters for every part of the
-/// SSA Style header.
 ///
 /// Currently only supports `.ass`, more precisely `ScriptType: V4.00+` and `[V4+ Styles]`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SSAStyle {
+    /// Name of the style. Case-sensitive. Cannot include commas.
     pub name: String,
+    /// Fontname as used by Windows. Case-sensitive.
     pub fontname: String,
+    /// Fontsize.
     pub fontsize: f32,
-    pub firstcolor: color::ColorType,
-    pub secondcolor: color::ColorType,
-    pub outlinecolor: color::ColorType,
-    pub backgroundcolor: color::ColorType,
+    /// The color that a subtitle will normally appear in.
+    pub primary_color: Color,
+    /// This color may be used instead of the Primary colour when a subtitle is automatically
+    /// shifted to prevent an onscreen collision, to distinguish the different subtitles.
+    pub secondary_color: Color,
+    /// This color may be used instead of the Primary or Secondary colour when a subtitle is
+    /// automatically shifted to prevent an onscreen collision, to distinguish the different
+    /// subtitles.
+    pub outline_color: Color,
+    /// The color of the subtitle outline or shadow.
+    pub back_color: Color,
+    /// Defines whether text is bold or not.
     pub bold: bool,
+    /// Defines whether text is italic or not.
     pub italic: bool,
-    pub unerline: bool,
+    /// Defines whether text is underlined or not.
+    pub underline: bool,
+    /// Defines whether text is strikeout or not.
     pub strikeout: bool,
-    pub scalex: f32,
-    pub scaley: f32,
+    /// Modifies the width of the font. Value is percentage.
+    pub scale_x: f32,
+    /// Modifies the height of the font. Value is percentage.
+    pub scale_y: f32,
+    /// Extra space between characters (in pixels).
     pub spacing: f32,
+    /// Origin of the rotation is defined by the alignment (as degrees).
     pub angle: f32,
-    pub borderstyle: i8,
-    pub outline: f32,
-    pub shadow: f32,
-    pub alignment: color::Alignment,
-    pub lmargin: i32,
-    pub rmargin: i32,
-    pub vmargin: i32,
-    pub alpha: i32,
+    /// Border style.
+    /// Allowed values are:
+    /// - `1`: Outline + drop shadow
+    /// - `3`: Opaque box
+    pub border_style: u8,
+    /// If [SSAStyle::border_style] is `1`, then this specifies the width of the outline around the
+    /// text (in pixels).
+    /// Values may be `0`, `1`, `2`, `3` or `4`.
+    pub outline: i8,
+    /// If [SSAStyle::border_style] is `1`, then this specifies the depth of the drop shadow behind
+    /// the text (in pixels). Values may be `0`, `1`, `2`, `3` or `4`. Drop shadow is always used in
+    /// addition to an outline - SSA will force an outline of 1 pixel if no outline width is given.
+    pub shadow: i8,
+    /// Sets how text is "justified" within the Left/Right onscreen margins, and also the vertical
+    /// placing.
+    pub alignment: Alignment,
+    /// Defines the Left Margin in pixels.
+    pub margin_l: i32,
+    /// Defines the Right Margin in pixels.
+    pub margin_r: i32,
+    /// Defines the Vertical Left Margin in pixels.
+    pub margin_v: i32,
+    /// Specifies the font character set or encoding and on multilingual Windows installations it
+    /// provides access to characters used in multiple than one language. It is usually 0 (zero)
+    /// for English (Western, ANSI) Windows.
     pub encoding: i32,
-    pub drawing: bool,
 }
 impl Eq for SSAStyle {}
+
 impl Default for SSAStyle {
     fn default() -> Self {
         SSAStyle {
             name: "Default".to_string(),
             fontname: "Trebuchet MS".to_string(),
             fontsize: 25.5,
-            firstcolor: color::ColorType::SSAColor(color::WHITET),
-            secondcolor: color::ColorType::SSAColor(color::TRANSPARENT),
-            outlinecolor: color::ColorType::SSAColor(color::TRANSPARENT),
-            backgroundcolor: color::ColorType::SSAColor(color::TRANSPARENT),
+            primary_color: WHITE,
+            secondary_color: TRANSPARENT,
+            outline_color: TRANSPARENT,
+            back_color: TRANSPARENT,
             bold: false,
-            italic: true,
-            unerline: true,
-            strikeout: true,
-            scalex: 120.0,
-            scaley: 120.0,
+            italic: false,
+            underline: false,
+            strikeout: false,
+            scale_x: 120.0,
+            scale_y: 120.0,
             spacing: 0.0,
             angle: 0.0,
-            borderstyle: 1,
-            outline: 1.0,
-            shadow: 1.0,
+            border_style: 1,
+            outline: 1,
+            shadow: 1,
             alignment: Alignment::BottomCenter,
-            lmargin: 0,
-            rmargin: 0,
-            vmargin: 30,
-            alpha: 0,
+            margin_l: 0,
+            margin_r: 0,
+            margin_v: 20,
             encoding: 0,
-            drawing: false,
         }
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub enum SSAEventLineType {
+    Dialogue,
+    Comment,
+    Other(String),
 }
 
 /// Describes each individual element of an `Event` line in the `.ass` format
@@ -99,93 +184,125 @@ impl Default for SSAStyle {
 /// `00:00:20.00` and it can be represented using [Time::to_ass_string]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SSAEvent {
-    /// Defaults to 0
-    pub layer: i32,
-    /// [Time] Value representing the start time of the line being displayed
-    pub line_start: Time,
-    /// [Time] Value representing the end time of the line being displayed
-    pub line_end: Time,
-    /// String value relating to an [SSAStyle]
+    /// Subtitles having different layer number will be ignored during the collusion detection.
+    /// Higher numbered layers will be drawn over the lower numbered.
+    pub layer: u32,
+    /// Start time of the line being displayed.
+    pub start: Time,
+    /// End time of the line being displayed
+    pub end: Time,
+    /// String value relating to an [SSAStyle].
     pub style: String,
-    /// Generally this is used for "speaker name", in most cases it's an unused field
+    /// Generally this is used for "speaker name", in most cases it's an unused field.
     pub name: String,
     /// SSA/ASS documentation describes the l/r/v margins as being floats so...here goes
     /// In practice it gets represented as `0020` and similar `{:0>4}` patterns.
-    pub lmargin: f32,
+    pub margin_l: f32,
     /// SSA/ASS documentation describes the l/r/v margins as being floats so...here goes
     /// In practice it gets represented as `0020` and similar `{:0>4}` patterns.
-    pub rmargin: f32,
+    pub margin_r: f32,
     /// SSA/ASS documentation describes the l/r/v margins as being floats so...here goes
     /// In practice it gets represented as `0020` and similar `{:0>4}` patterns.
-    pub vmargin: f32,
-    /// SSA Documentation describes it, it's here, no idea what it does, but you can write it if you wish
+    pub margin_v: f32,
+    /// SSA Documentation describes it, it's here, no idea what it does, but you can write it if you
+    /// wish.
     pub effect: String,
-    /// SSA Documentation describes it, it's here, no idea what it does, but you can write it if you wish
-    pub linetype: String,
     /// The line's text.
-    pub line_text: String,
+    pub text: String,
+    pub line_type: SSAEventLineType,
 }
 impl Eq for SSAEvent {}
+
 impl Default for SSAEvent {
     fn default() -> Self {
         SSAEvent {
             layer: 0,
-            line_start: Time::from_str("0:00:00.20").unwrap(),
-            line_end: Time::from_str("0:00:02.20").unwrap(),
+            start: Time::from_hms(0, 0, 0).unwrap(),
+            end: Time::from_hms(0, 0, 0).unwrap(),
             style: "Default".to_string(),
             name: "".to_string(),
-            lmargin: 0.0,
-            rmargin: 0.0,
-            vmargin: 0.0,
+            margin_l: 0.0,
+            margin_r: 0.0,
+            margin_v: 0.0,
             effect: "".to_string(),
-            linetype: "Dialogue".to_string(),
-            line_text: "Lorem Ipsum".to_string(),
+            text: "".to_string(),
+            line_type: SSAEventLineType::Dialogue,
         }
     }
 }
-/// Contains the styles,events and info as well as a format mentioning wether it's `.ass` or `.ssa`
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SSAFile {
-    pub events: Vec<SSAEvent>,
+/// Contains the styles, events and info as well as a format mentioning whether it's `.ass` or `.ssa`
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+pub struct SSA {
+    pub info: SSAInfo,
     pub styles: Vec<SSAStyle>,
-    pub info: HashMap<String, String>,
-    pub format: String,
-}
-/// The Default SSAFile contains a list of Script Info headers populated with safe and usable default values
-///
-/// In general tests, `ScaledBorderAndShadows: yes` seems to be somewhat required for subtitles to display properly
-impl Default for SSAFile {
-    fn default() -> Self {
-        let mut default_info: HashMap<String, String> = HashMap::new();
-        default_info.insert("Title".to_string(), "subtitle".to_string());
-        default_info.insert("Synch Point".to_string(), "".to_string());
-        default_info.insert("Script Updated By".to_string(), "rsubs lib".to_string());
-        default_info.insert("ScriptType".to_string(), "V4.00+".to_string());
-        default_info.insert("Collisions".to_string(), "Normal".to_string());
-        default_info.insert("WrapStyle".to_string(), "0".to_string());
-        default_info.insert("ScaledBorderAndShadows".to_string(), "yes".to_string());
-        default_info.insert("PlayResX".to_string(), "640".to_string());
-        default_info.insert("PlayResY".to_string(), "480".to_string());
-        SSAFile {
-            events: vec![SSAEvent::default()],
-            styles: vec![SSAStyle::default()],
-            info: default_info,
-            format: ".ass".to_string(),
-        }
-    }
+    pub events: Vec<SSAEvent>,
+    pub fonts: Vec<String>,
+    pub graphics: Vec<String>,
 }
 
-impl From<VTTFile> for SSAFile {
-    fn from(a: VTTFile) -> Self {
-        a.to_ass()
+impl SSA {
+    /// Parses the given [String] into [SSA].
+    pub fn parse<S: AsRef<str>>(content: S) -> Result<SSA, SSAError> {
+        let mut line_num = 0;
+
+        let mut blocks = vec![vec![]];
+        for line in content.as_ref().lines() {
+            if line.trim().is_empty() {
+                blocks.push(vec![])
+            } else {
+                blocks.last_mut().unwrap().push(line)
+            }
+        }
+
+        let mut ssa = SSA::default();
+
+        if blocks[0].first().is_some_and(|l| *l == "[Script Info]") {
+            line_num += 1;
+            let mut block = blocks.remove(0);
+            let block_len = block.len();
+            block.remove(0);
+            ssa.info = parse::parse_script_info_block(block.into_iter())
+                .map_err(|e| SSAError::new(e.kind, line_num + e.line))?;
+            line_num += block_len
+        } else {
+            return Err(SSAError::new(SSAErrorKind::Invalid, 1));
+        }
+
+        for mut block in blocks {
+            line_num += 1;
+
+            if block.is_empty() {
+                return Err(SSAError::new(SSAErrorKind::EmptyBlock, line_num));
+            }
+
+            let block_len = block.len();
+
+            match block.remove(0) {
+                "[V4+ Styles]" => {
+                    ssa.styles = parse::parse_style_block(block.into_iter())
+                        .map_err(|e| SSAError::new(e.kind, line_num + e.line))?
+                }
+                "[Events]" => {
+                    ssa.events = parse::parse_events_block(block.into_iter())
+                        .map_err(|e| SSAError::new(e.kind, line_num + e.line))?
+                }
+                "[Fonts]" => {
+                    ssa.fonts = parse::parse_fonts_block(block.into_iter())
+                        .map_err(|e| SSAError::new(e.kind, line_num + e.line))?
+                }
+                "[Graphics]" => {
+                    ssa.graphics = parse::parse_graphics_block(block.into_iter())
+                        .map_err(|e| SSAError::new(e.kind, line_num + e.line))?
+                }
+                _ => continue,
+            }
+
+            line_num += block_len
+        }
+
+        Ok(ssa)
     }
-}
-impl From<SRTFile> for SSAFile {
-    fn from(a: SRTFile) -> Self {
-        a.to_ass()
-    }
-}
-impl SSAFile {
+
     /// Converts the SSAFile to a SRTFile. Due to `.srt` being a far less complex
     /// format, most styles are being ignored.
     ///
@@ -196,39 +313,45 @@ impl SSAFile {
     ///
     /// If found, ssa specific triggers for those supported tags are replaced with their `.srt` alternatives.
     ///
-    pub fn to_srt(self) -> SRTFile {
-        let mut a = SRTFile::default();
-        let regex =
-            Regex::new(r"(?P<main>\{\\(?P<type>.)(?P<trigger>.*?)\})").expect("Regex broke");
-        for (i, j) in self.events.iter().enumerate() {
-            let mut line = SRTLine {
-                line_number: (i + 1) as i32,
-                line_start: j.line_start.clone(),
-                line_end: j.line_end.clone(),
-                line_text: "".to_string(),
-            };
+    pub fn to_srt(&self) -> SRT {
+        let style_remove_regex = Regex::new(r"(?m)\{\\.+?}").unwrap();
 
-            line.line_text = j.line_text.replace("\\N", "\r\n");
+        let mut lines = vec![];
 
-            for k in regex.captures_iter(&line.line_text.clone()) {
-                let tag_type = k.name("type").unwrap().as_str();
-                let tag_main = k.name("main").unwrap().as_str();
-                let tag_trigger = k.name("trigger").unwrap().as_str();
-                if tag_type.chars().all(|x| ['b', 'i', 'u'].contains(&x)) {
-                    if tag_trigger == "0" {
-                        line.line_text = line
-                            .line_text
-                            .replace(tag_main, &("</".to_string() + tag_type + ">"));
-                    } else if tag_trigger == "1" {
-                        line.line_text = line
-                            .line_text
-                            .replace(tag_main, &("<".to_string() + tag_type + ">"));
+        for (i, event) in self.events.iter().enumerate() {
+            let mut text = event
+                .text
+                .replace("{\\b1}", "<b>")
+                .replace("{\\b0}", "</b>")
+                .replace("{\\i1}", "<i>")
+                .replace("{\\i0}", "</i>")
+                .replace("{\\u1}", "<u>")
+                .replace("{\\u0}", "</u>")
+                .replace("\\N", "\n");
+
+            if !event.style.is_empty() {
+                if let Some(style) = self.styles.iter().find(|s| s.name == event.style) {
+                    if style.bold {
+                        text = format!("<b>{text}</b>")
+                    }
+                    if style.italic {
+                        text = format!("<i>{text}</i>")
+                    }
+                    if style.underline {
+                        text = format!("<u>{text}</u>")
                     }
                 }
             }
-            a.lines.push(line);
+
+            lines.push(SRTLine {
+                sequence_number: i as u32 + 1,
+                start: event.start,
+                end: event.end,
+                text: style_remove_regex.replace_all(&text, "").to_string(),
+            })
         }
-        a
+
+        SRT { lines }
     }
     /// Converts the SSAFile to a VTTFile.
     ///
@@ -240,589 +363,680 @@ impl SSAFile {
     /// If found, ssa specific triggers for those supported tags are replaced with their `.vtt` alternatives.
     ///
     /// In addition, if an SSAEvent has a related SSAStyle, the SSAStyle is converted to a VTTStyle that will be wrapped around the lines indicating it.
-    pub fn to_vtt(self) -> VTTFile {
-        let mut a = VTTFile::default();
-        a.lines.clear();
-        let regex =
-            Regex::new(r"(?P<main>\{\\(?P<type>.)(?P<trigger>.*?)\})").expect("Regex broke");
-        let mut stylctr = 1;
-        for i in self.styles {
-            let styl = VTTStyle {
-                color: color::ColorType::VTTColor0A(i.firstcolor.get_color()),
-                font_family: format!("\"{}\"", i.fontname),
-                name: Some(i.name.replace(' ', "")),
-                font_size: i.fontsize.to_string() + "px",
-                background_color: color::ColorType::VTTColor(i.backgroundcolor.get_color()),
-                ..Default::default()
-            };
-            if stylctr == 1 {
-                stylctr += 1;
-                a.styles.clear();
-            }
-            a.styles.push(styl);
-        }
-        for (i, j) in self.events.iter().enumerate() {
-            let mut line = VTTLine {
-                line_number: (i + 1).to_string(),
-                style: Some(j.style.to_string().replace(' ', "")),
-                position: None,
-                line_start: j.line_start.clone(),
-                line_end: j.line_end.clone(),
-                line_text: "".to_string(),
-            };
-            line.line_text = j.line_text.replace("\\N", "\r\n");
-
-            for k in regex.captures_iter(&line.line_text.clone()) {
-                let tag_type = k.name("type").unwrap().as_str();
-                let tag_main = k.name("main").unwrap().as_str();
-                let tag_trigger = k.name("trigger").unwrap().as_str();
-                if tag_type.chars().all(|x| ['b', 'i', 'u'].contains(&x)) {
-                    if tag_trigger == "0" {
-                        line.line_text = line
-                            .line_text
-                            .replace(tag_main, &("</".to_string() + tag_type + ">"));
-                    } else if tag_trigger == "1" {
-                        line.line_text = line
-                            .line_text
-                            .replace(tag_main, &("<".to_string() + tag_type + ">"));
-                    }
-                } else {
-                    line.line_text = line.line_text.replace(tag_main, "");
-                }
-            }
-            line.line_text = "<".to_string()
-                + &line.clone().style.unwrap().to_string()
-                + ">"
-                + &line.clone().line_text
-                + "</"
-                + &line.clone().style.unwrap().to_string()
-                + ">";
-            a.lines.push(line);
-        }
-        a
-    }
-
-    /// Writes the SSAFile to a file specified by a path String.
-    pub fn to_file<P: AsRef<Path>>(self, path: P) -> std::io::Result<()> {
-        let mut w = File::options()
-            .create(true)
-            .write(true)
-            .open(path)
-            .expect("File can't be created");
-        write!(w, "{self}")?;
-        Ok(())
+    pub fn to_vtt(self) -> VTT {
+        self.to_srt().to_vtt()
     }
 }
 
-impl Display for SSAFile {
+impl Display for SSA {
+    #[rustfmt::skip]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut str = "[Script Info]\r\n".to_string();
-        for (i, j) in self.info.clone() {
-            str += &format!("{i}: {j}\r\n").to_string();
-        }
-        str += "\r\n[V4+ Styles]\r\nFormat: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,Strikeout,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding\r\n";
-        for i in self.styles.clone() {
-            str += &("Style: ".to_string()
-                + &i.name
-                + ","
-                + &i.fontname
-                + ","
-                + &i.fontsize.to_string()
-                + ","
-                + &i.firstcolor.to_string()
-                + ","
-                + &i.secondcolor.to_string()
-                + ","
-                + &i.outlinecolor.to_string()
-                + ","
-                + &i.backgroundcolor.to_string()
-                + ","
-                + &i.bold
-                    .then(|| "-1".to_string())
-                    .or_else(|| Some("0".to_string()))
-                    .expect("Proper")
-                + ","
-                + &i.italic
-                    .then(|| "-1".to_string())
-                    .or_else(|| Some("0".to_string()))
-                    .expect("Proper")
-                + ","
-                + &i.unerline
-                    .then(|| "-1".to_string())
-                    .or_else(|| Some("0".to_string()))
-                    .expect("Proper")
-                + ","
-                + &i.strikeout
-                    .then(|| "-1".to_string())
-                    .or_else(|| Some("0".to_string()))
-                    .expect("Proper")
-                + ","
-                + &(i.scalex as i32).to_string()
-                + ","
-                + &(i.scaley as i32).to_string()
-                + ","
-                + &(i.spacing as i32).to_string()
-                + ","
-                + &(i.angle as i32).to_string()
-                + ","
-                + &i.borderstyle.to_string()
-                + ","
-                + &(i.outline as i32).to_string()
-                + ","
-                + &(i.shadow as i32).to_string()
-                + ","
-                + &(i.alignment as i32).to_string()
-                + ","
-                + &format!("{:0>4}", i.lmargin.to_string())
-                + ","
-                + &format!("{:0>4}", i.rmargin.to_string())
-                + ","
-                + &format!("{:0>4}", i.vmargin.to_string())
-                + ","
-                + &i.encoding.to_string()
-                + "\r\n");
+        let mut lines = vec![];
+
+        lines.push("[Script Info]".to_string());
+        lines.extend(self.info.title.as_ref().map(|l| format!("Title: {l}")));
+        lines.extend(self.info.original_script.as_ref().map(|l| format!("Original Script: {l}")));
+        lines.extend(self.info.original_translation.as_ref().map(|l| format!("Original Translation: {l}")));
+        lines.extend(self.info.original_editing.as_ref().map(|l| format!("Original Editing: {l}")));
+        lines.extend(self.info.original_timing.as_ref().map(|l| format!("Original Timing: {l}")));
+        lines.extend(self.info.synch_point.map(|l| format!("Synch Point: {l}")));
+        lines.extend(self.info.script_update_by.as_ref().map(|l| format!("Script Updated By: {l}")));
+        lines.extend(self.info.update_details.as_ref().map(|l| format!("Update Details: {l}")));
+        lines.extend(self.info.script_type.as_ref().map(|l| format!("Script Type: {l}")));
+        lines.extend(self.info.collisions.as_ref().map(|l| format!("Collisions: {l}")));
+        lines.extend(self.info.play_res_y.map(|l| format!("PlayResY: {l}")));
+        lines.extend(self.info.play_res_x.map(|l| format!("PlayResX: {l}")));
+        lines.extend(self.info.play_depth.map(|l| format!("PlayDepth: {l}")));
+        lines.extend(self.info.timer.map(|l| format!("Timer: {l}")));
+        lines.extend(self.info.wrap_style.map(|l| format!("WrapStyle: {l}")));
+        for (k, v) in &self.info.additional_fields {
+            lines.push(format!("{k}: {v}"))
         }
 
-        str += "\r\n[Events]\r\nFormat: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\r\n";
-        for i in self.events.clone() {
-            str += &(i.linetype
-                + ": "
-                + &i.layer.to_string()
-                + ","
-                + &i.line_start.to_ass_string()
-                + ","
-                + &i.line_end.to_ass_string()
-                + ","
-                + &i.style
-                + ","
-                + &i.name
-                + ","
-                + &format!("{:0>4}", i.lmargin.to_string())
-                + ","
-                + &format!("{:0>4}", i.rmargin.to_string())
-                + ","
-                + &format!("{:0>4}", i.vmargin.to_string())
-                + ","
-                + &i.effect
-                + ","
-                + &i.line_text
-                + "\r\n");
+        lines.push("".to_string());
+        lines.push("[V4+ Styles]".to_string());
+        lines.push("Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColor,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding".to_string());
+        for style in &self.styles {
+            let line = [
+                style.name.to_string(),
+                style.fontname.to_string(),
+                style.fontsize.to_string(),
+                style.primary_color.to_ssa_string(),
+                style.secondary_color.to_ssa_string(),
+                style.outline_color.to_ssa_string(),
+                style.back_color.to_ssa_string(),
+                if style.bold { "-1" } else { "0" }.to_string(),
+                if style.italic { "-1" } else { "0" }.to_string(),
+                if style.underline { "-1" } else { "0" }.to_string(),
+                if style.strikeout { "-1" } else { "0" }.to_string(),
+                style.scale_x.to_string(),
+                style.scale_y.to_string(),
+                style.spacing.to_string(),
+                style.angle.to_string(),
+                style.border_style.to_string(),
+                style.outline.to_string(),
+                style.shadow.to_string(),
+                (style.alignment as u8).to_string(),
+                style.margin_l.to_string(),
+                style.margin_r.to_string(),
+                style.margin_v.to_string(),
+                style.encoding.to_string(),
+            ];
+            lines.push(format!("Style: {}", line.join(",")))
         }
-        write!(f, "{str}")
+
+        lines.push("".to_string());
+        lines.push("[Events]".to_string());
+        lines.push("Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text".to_string());
+        for event in &self.events {
+            let line = [
+                event.layer.to_string(),
+                event.start.format(TIME_FORMAT).unwrap(),
+                event.end.format(TIME_FORMAT).unwrap(),
+                event.style.to_string(),
+                event.name.to_string(),
+                event.margin_l.to_string(),
+                event.margin_r.to_string(),
+                event.margin_v.to_string(),
+                event.effect.to_string(),
+                event.text.to_string()
+            ];
+            lines.push(format!("Dialogue: {}", line.join(",")))
+        }
+
+        write!(f, "{}", lines.join("\n"))
     }
 }
 
-impl FromStr for SSAFile {
-    type Err = std::io::Error;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let path_or_content = s.to_string();
-        let mut b: String = "".to_string();
-        let mut sub: SSAFile = SSAFile::default();
-        if !path_or_content.contains('\n') {
-            if std::fs::read(&path_or_content).is_ok() {
-                let mut f = File::open(path_or_content)?;
-                f.read_to_string(&mut b)?;
+error! {
+    SSAError => SSAErrorKind {
+        Invalid,
+        EmptyBlock,
+        Parse(String),
+        MissingHeader(String),
+    }
+}
+
+mod parse {
+    use super::*;
+    use std::num::{ParseFloatError, ParseIntError};
+    use time::format_description::BorrowedFormatItem;
+    use time::macros::format_description;
+
+    pub(super) struct Error {
+        pub(super) line: usize,
+        pub(super) kind: SSAErrorKind,
+    }
+
+    pub(super) const TIME_FORMAT: &[BorrowedFormatItem] =
+        format_description!("[hour padding:none]:[minute]:[second].[subsecond digits:2]");
+
+    type Result<T> = std::result::Result<T, Error>;
+
+    pub(super) fn parse_script_info_block<'a, I: Iterator<Item = &'a str>>(
+        block_lines: I,
+    ) -> Result<SSAInfo> {
+        let mut info = SSAInfo::default();
+
+        for (i, line) in block_lines.enumerate() {
+            if line.starts_with(';') {
+                continue;
             }
-        } else {
-            b = path_or_content;
+
+            let Some((name, mut value)) = line.split_once(':') else {
+                return Err(Error {
+                    line: 1 + i,
+                    kind: SSAErrorKind::Parse("delimiter ':' missing".to_string()),
+                });
+            };
+            value = value.trim();
+
+            if value.is_empty() {
+                continue;
+            }
+
+            match name {
+                "Title" => info.title = Some(value.to_string()),
+                "Original Script" => info.original_script = Some(value.to_string()),
+                "Original Translation" => info.original_translation = Some(value.to_string()),
+                "Original Editing" => info.original_editing = Some(value.to_string()),
+                "Original Timing" => info.original_timing = Some(value.to_string()),
+                "Synch Point" => {
+                    info.synch_point = value.parse::<f32>().map(Some).map_err(|e| Error {
+                        line: 1 + i,
+                        kind: SSAErrorKind::Parse(e.to_string()),
+                    })?
+                }
+                "Script Updated By" => info.script_update_by = Some(value.to_string()),
+                "Update Details" => info.update_details = Some(value.to_string()),
+                "Script Type" => info.script_type = Some(value.to_string()),
+                "Collisions" => info.collisions = Some(value.to_string()),
+                "PlayResY" => {
+                    info.play_res_y = value.parse::<u32>().map(Some).map_err(|e| Error {
+                        line: 1 + i,
+                        kind: SSAErrorKind::Parse(e.to_string()),
+                    })?
+                }
+                "PlayResX" => {
+                    info.play_res_x = value.parse::<u32>().map(Some).map_err(|e| Error {
+                        line: 1 + i,
+                        kind: SSAErrorKind::Parse(e.to_string()),
+                    })?
+                }
+                "PlayDepth" => {
+                    info.play_depth = value.parse::<u32>().map(Some).map_err(|e| Error {
+                        line: 1 + i,
+                        kind: SSAErrorKind::Parse(e.to_string()),
+                    })?
+                }
+                "Timer" => {
+                    info.timer = value.parse::<f32>().map(Some).map_err(|e| Error {
+                        line: 1 + i,
+                        kind: SSAErrorKind::Parse(e.to_string()),
+                    })?
+                }
+                "WrapStyle" => {
+                    info.wrap_style = value.parse::<u8>().map(Some).map_err(|e| Error {
+                        line: 1 + i,
+                        kind: SSAErrorKind::Parse(e.to_string()),
+                    })?
+                }
+                _ => {
+                    info.additional_fields
+                        .insert(name.to_string(), value.to_string());
+                }
+            }
         }
-        let (split, ssplit) = if b.split("\r\n\r\n").count() < 2 {
-            ("\n\n", "\n")
-        } else {
-            ("\r\n\r\n", "\r\n")
+
+        Ok(info)
+    }
+
+    pub(super) fn parse_style_block<'a, I: Iterator<Item = &'a str>>(
+        mut block_lines: I,
+    ) -> Result<Vec<SSAStyle>> {
+        let mut header_line = 1;
+        let header = loop {
+            let Some(line) = block_lines.next() else {
+                return Err(Error {
+                    line: 1,
+                    kind: SSAErrorKind::EmptyBlock,
+                });
+            };
+            if !line.starts_with(';') {
+                break line.to_string();
+            }
+            header_line += 1;
         };
-        let c: Vec<&str> = b.split(split).collect();
-        for i in c {
-            if i.contains("Styles]") {
-                sub.styles.clear();
-                let mut style: HashMap<String, Vec<&str>> = HashMap::new();
-                let keys = i
-                    .split(ssplit)
-                    .filter(|x| x.starts_with("Format:"))
-                    .collect::<String>();
-                let fmtheaders = keys.strip_prefix("Format: ").unwrap().replace(' ', "");
-                let finalheaders = fmtheaders.split(',').collect::<Vec<&str>>();
-                style.insert("Format".to_string(), finalheaders);
+        let Some(header) = header.strip_prefix("Format:") else {
+            return Err(Error {
+                line: header_line,
+                kind: SSAErrorKind::Parse("styles header must start with 'Format:'".to_string()),
+            });
+        };
+        let headers = header.trim().split(',').collect();
 
-                let keys2 = i
-                    .split('\n')
-                    .filter(|&x| x.starts_with("Style: "))
-                    .map(|x| {
-                        <&str>::clone(
-                            x.strip_prefix("Style: ")
-                                .unwrap()
-                                .split(',')
-                                .collect::<Vec<&str>>()
-                                .first()
-                                .unwrap(),
-                        )
-                    })
-                    .collect::<Vec<&str>>();
-                let values2 = i
-                    .split(ssplit)
-                    .filter(|&x| x.starts_with("Style: "))
-                    .map(|x| x.strip_prefix("Style: ").unwrap().borrow())
-                    .collect::<Vec<&str>>();
-                for (i, j) in keys2.into_iter().enumerate() {
-                    style.insert(
-                        j.to_string(),
-                        values2.get(i).unwrap().split(',').collect::<Vec<&str>>(),
-                    );
-                }
-                for (k, l) in style.clone().into_iter() {
-                    if k == *"Format" {
-                        continue;
-                    }
-                    let styl = SSAStyle {
-                        name: l.first().expect("missing_name").to_string(),
-                        fontname: l.get(1).expect("missing_name").to_string(),
-                        fontsize: l
-                            .get(2)
-                            .expect("missing_name")
-                            .to_string()
-                            .parse::<f32>()
-                            .expect("msg"),
-                        firstcolor: color::ColorType::SSAColor(
-                            Color::from_str(l.get(3).expect("missing_name")).expect("msg"),
-                        ),
-                        secondcolor: color::ColorType::SSAColor(
-                            Color::from_str(l.get(4).expect("missing_name")).expect("msg"),
-                        ),
-                        outlinecolor: color::ColorType::SSAColor(
-                            Color::from_str(l.get(5).expect("missing_name")).expect("msg"),
-                        ),
-                        backgroundcolor: color::ColorType::SSAColor(
-                            Color::from_str(l.get(6).expect("missing_name")).expect("msg"),
-                        ),
-                        bold: l.get(7).expect("missing value") == &"-1",
-                        italic: l.get(8).expect("missing value") == &"-1",
-                        unerline: l.get(9).expect("missing value") == &"-1",
-                        strikeout: l.get(10).expect("missing value") == &"-1",
-                        scalex: l
-                            .get(11)
-                            .expect("Not provided ScaleX")
-                            .parse::<f32>()
-                            .expect("ScaleX value not proper"),
-                        scaley: l
-                            .get(12)
-                            .expect("Not provided ScaleY")
-                            .parse::<f32>()
-                            .expect("ScaleY value not proper"),
-                        spacing: l
-                            .get(13)
-                            .expect("Not provided Spacing")
-                            .parse::<f32>()
-                            .expect("Spacing value not proper"),
-                        angle: l
-                            .get(14)
-                            .expect("Not provided Spacing")
-                            .parse::<f32>()
-                            .expect("Spacing value not proper"),
-                        borderstyle: l
-                            .get(15)
-                            .expect("Not provided borderstyle")
-                            .parse::<i8>()
-                            .expect("borderstyle value not proper"),
-                        outline: l
-                            .get(16)
-                            .expect("Not provided Spacing")
-                            .parse::<f32>()
-                            .expect("Spacing value not proper"),
-                        shadow: l
-                            .get(17)
-                            .expect("Not provided Spacing")
-                            .parse::<f32>()
-                            .expect("Spacing value not proper"),
-                        alignment: Alignment::infer_from_str(
-                            l.get(18).expect("Not provided Spacing"),
-                        )
-                        .unwrap(),
-                        lmargin: l
-                            .get(19)
-                            .expect("Not provided lmargin")
-                            .parse::<i32>()
-                            .expect("lmargin value not proper"),
-                        rmargin: l
-                            .get(20)
-                            .expect("Not provided rmargin")
-                            .parse::<i32>()
-                            .expect("rmargin value not proper"),
-                        vmargin: l
-                            .get(21)
-                            .expect("Not provided vmargin")
-                            .parse::<i32>()
-                            .expect("vmargin value not proper"),
-                        alpha: 0,
-                        encoding: l
-                            .get(22)
-                            .expect("Not provided encoding")
-                            .parse::<i32>()
-                            .expect("encoding value not proper"),
-                        drawing: false,
-                    };
-                    sub.styles.push(styl);
-                }
+        let mut styles = vec![];
+
+        for (i, line) in block_lines.enumerate() {
+            if line.starts_with(';') {
+                continue;
             }
-            if i.contains("[Script Info]") {
-                sub.info.clear();
-                for j in i.split(ssplit).collect::<Vec<&str>>().iter() {
-                    let line = j.split_once(':').unwrap_or(("", ""));
-                    sub.info
-                        .insert(line.0.to_string(), line.1.trim().to_string());
-                }
-                sub.info.remove("");
-                if !sub.info.contains_key("ScaledBorderAndShadows") {
-                    sub.info
-                        .insert("ScaledBorderAndShadows".to_string(), "yes".to_string());
-                }
-            }
-            if i.contains("[Events]") {
-                sub.events.clear();
-                for j in i.split(ssplit) {
-                    if j.starts_with("Dialogue:") {
-                        let mut ev = SSAEvent::default();
-                        let line = j
-                            .strip_prefix("Dialogue: ")
-                            .unwrap()
-                            .splitn(10, ',')
-                            .collect::<Vec<&str>>();
-                        ev.layer = line
-                            .first()
-                            .unwrap()
-                            .parse::<i32>()
-                            .expect("Failed to parse layer");
-                        ev.line_start = Time::from_str(line.get(1).unwrap()).unwrap();
-                        ev.line_end = Time::from_str(line.get(2).unwrap()).unwrap();
-                        ev.style = line.get(3).unwrap().to_string();
-                        ev.name = line.get(4).unwrap().to_string();
-                        ev.lmargin = line
-                            .get(5)
-                            .unwrap()
-                            .to_string()
-                            .parse::<f32>()
-                            .expect("couldn't conv to float");
-                        ev.rmargin = line
-                            .get(6)
-                            .unwrap()
-                            .to_string()
-                            .parse::<f32>()
-                            .expect("couldn't conv to float");
-                        ev.vmargin = line
-                            .get(7)
-                            .unwrap()
-                            .to_string()
-                            .parse::<f32>()
-                            .expect("couldn't conv to float");
-                        ev.effect = line.get(8).unwrap().to_string();
-                        ev.line_text = line.get(9).unwrap().to_string();
-                        sub.events.push(ev);
-                    }
-                }
-            }
+
+            let Some(line) = line.strip_prefix("Style:") else {
+                return Err(Error {
+                    line: header_line + 1 + i,
+                    kind: SSAErrorKind::Parse("styles line must start with 'Style:'".to_string()),
+                });
+            };
+            let line_list: Vec<&str> = line.trim().split(',').collect();
+
+            styles.push(SSAStyle {
+                name: get_line_value(
+                    &headers,
+                    "Name",
+                    &line_list,
+                    header_line,
+                    header_line + 1 + i,
+                )?
+                .to_string(),
+                fontname: get_line_value(
+                    &headers,
+                    "Fontname",
+                    &line_list,
+                    header_line,
+                    header_line + 1 + i,
+                )?
+                .to_string(),
+                fontsize: get_line_value(
+                    &headers,
+                    "Fontsize",
+                    &line_list,
+                    header_line,
+                    header_line + 1 + i,
+                )?
+                .parse()
+                .map_err(|e| map_parse_float_err(e, header_line + 1 + i))?,
+                primary_color: Color::from_ssa(get_line_value(
+                    &headers,
+                    "PrimaryColour",
+                    &line_list,
+                    header_line,
+                    header_line + 1 + i,
+                )?)
+                .map_err(|e| Error {
+                    line: 2 + i,
+                    kind: SSAErrorKind::Parse(e.to_string()),
+                })?,
+                secondary_color: Color::from_ssa(get_line_value(
+                    &headers,
+                    "SecondaryColour",
+                    &line_list,
+                    header_line,
+                    header_line + 1 + i,
+                )?)
+                .map_err(|e| Error {
+                    line: 2 + i,
+                    kind: SSAErrorKind::Parse(e.to_string()),
+                })?,
+                outline_color: Color::from_ssa(get_line_value(
+                    &headers,
+                    "OutlineColour",
+                    &line_list,
+                    header_line,
+                    header_line + 1 + i,
+                )?)
+                .map_err(|e| Error {
+                    line: 2 + i,
+                    kind: SSAErrorKind::Parse(e.to_string()),
+                })?,
+                back_color: Color::from_ssa(get_line_value(
+                    &headers,
+                    "BackColour",
+                    &line_list,
+                    header_line,
+                    header_line + 1 + i,
+                )?)
+                .map_err(|e| Error {
+                    line: header_line + 1 + i,
+                    kind: SSAErrorKind::Parse(e.to_string()),
+                })?,
+                bold: parse_str_to_bool(
+                    get_line_value(
+                        &headers,
+                        "Bold",
+                        &line_list,
+                        header_line,
+                        header_line + 1 + i,
+                    )?,
+                    header_line + 1 + i,
+                )?,
+                italic: parse_str_to_bool(
+                    get_line_value(
+                        &headers,
+                        "Italic",
+                        &line_list,
+                        header_line,
+                        header_line + 1 + i,
+                    )?,
+                    header_line + 1 + i,
+                )?,
+                underline: parse_str_to_bool(
+                    get_line_value(
+                        &headers,
+                        "Underline",
+                        &line_list,
+                        header_line,
+                        header_line + 1 + i,
+                    )?,
+                    header_line + 1 + i,
+                )?,
+                strikeout: parse_str_to_bool(
+                    get_line_value(
+                        &headers,
+                        "Strikeout",
+                        &line_list,
+                        header_line,
+                        header_line + 1 + i,
+                    )?,
+                    header_line + 1 + i,
+                )?,
+                scale_x: get_line_value(
+                    &headers,
+                    "ScaleX",
+                    &line_list,
+                    header_line,
+                    header_line + 1 + i,
+                )?
+                .parse()
+                .map_err(|e| map_parse_float_err(e, header_line + 1 + i))?,
+                scale_y: get_line_value(
+                    &headers,
+                    "ScaleY",
+                    &line_list,
+                    header_line,
+                    header_line + 1 + i,
+                )?
+                .parse()
+                .map_err(|e| map_parse_float_err(e, header_line + 1 + i))?,
+                spacing: get_line_value(
+                    &headers,
+                    "Spacing",
+                    &line_list,
+                    header_line,
+                    header_line + 1 + i,
+                )?
+                .parse()
+                .map_err(|e| map_parse_float_err(e, header_line + 1 + i))?,
+                angle: get_line_value(
+                    &headers,
+                    "Angle",
+                    &line_list,
+                    header_line,
+                    header_line + 1 + i,
+                )?
+                .parse()
+                .map_err(|e| map_parse_float_err(e, header_line + 1 + i))?,
+                border_style: get_line_value(
+                    &headers,
+                    "BorderStyle",
+                    &line_list,
+                    header_line,
+                    header_line + 1 + i,
+                )?
+                .parse()
+                .map_err(|e| map_parse_int_err(e, header_line + 1 + i))?,
+                outline: get_line_value(
+                    &headers,
+                    "Outline",
+                    &line_list,
+                    header_line,
+                    header_line + 1 + i,
+                )?
+                .parse()
+                .map_err(|e| map_parse_int_err(e, header_line + 1 + i))?,
+                shadow: get_line_value(
+                    &headers,
+                    "Shadow",
+                    &line_list,
+                    header_line,
+                    header_line + 1 + i,
+                )?
+                .parse()
+                .map_err(|e| map_parse_int_err(e, header_line + 1 + i))?,
+                alignment: Alignment::infer_from_str(get_line_value(
+                    &headers,
+                    "Alignment",
+                    &line_list,
+                    header_line,
+                    header_line + 1 + i,
+                )?)
+                .unwrap(),
+                margin_l: get_line_value(
+                    &headers,
+                    "MarginL",
+                    &line_list,
+                    header_line,
+                    header_line + 1 + i,
+                )?
+                .parse()
+                .map_err(|e| map_parse_int_err(e, header_line + 1 + i))?,
+                margin_r: get_line_value(
+                    &headers,
+                    "MarginR",
+                    &line_list,
+                    header_line,
+                    header_line + 1 + i,
+                )?
+                .parse()
+                .map_err(|e| map_parse_int_err(e, header_line + 1 + i))?,
+                margin_v: get_line_value(
+                    &headers,
+                    "MarginV",
+                    &line_list,
+                    header_line,
+                    header_line + 1 + i,
+                )?
+                .parse()
+                .map_err(|e| map_parse_int_err(e, header_line + 1 + i))?,
+                encoding: get_line_value(
+                    &headers,
+                    "Encoding",
+                    &line_list,
+                    header_line,
+                    header_line + 1 + i,
+                )?
+                .parse()
+                .map_err(|e| map_parse_int_err(e, header_line + 1 + i))?,
+            })
         }
-        Ok(sub)
+
+        Ok(styles)
     }
-}
 
-/// Parses the given [String] into a [SSAFile].
-pub fn parse(content: String) -> SSAFile {
-    let mut sub: SSAFile = SSAFile::default();
-    let (split, ssplit) = if content.split("\r\n\r\n").count() < 2 {
-        ("\n\n", "\n")
-    } else {
-        ("\r\n\r\n", "\r\n")
-    };
-    let c: Vec<&str> = content.split(split).collect();
-    for i in c {
-        if i.contains("Styles]") {
-            sub.styles.clear();
-            let mut style: HashMap<String, Vec<&str>> = HashMap::new();
-            let keys = i
-                .split(ssplit)
-                .filter(|x| x.starts_with("Format:"))
-                .collect::<String>();
-            let fmtheaders = keys.strip_prefix("Format: ").unwrap().replace(' ', "");
-            let finalheaders = fmtheaders.split(',').collect::<Vec<&str>>();
-            style.insert("Format".to_string(), finalheaders);
+    pub(super) fn parse_events_block<'a, I: Iterator<Item = &'a str>>(
+        mut block_lines: I,
+    ) -> Result<Vec<SSAEvent>> {
+        let mut header_line = 1;
+        let header = loop {
+            let Some(line) = block_lines.next() else {
+                return Err(Error {
+                    line: 1,
+                    kind: SSAErrorKind::EmptyBlock,
+                });
+            };
+            if !line.starts_with(';') {
+                break line.to_string();
+            }
+            header_line += 1;
+        };
+        let Some(header) = header.strip_prefix("Format:") else {
+            return Err(Error {
+                line: header_line,
+                kind: SSAErrorKind::Parse("events header must start with 'Format:'".to_string()),
+            });
+        };
+        let headers = header.trim().split(',').collect();
 
-            let keys2 = i
-                .split('\n')
-                .filter(|&x| x.starts_with("Style: "))
-                .map(|x| {
-                    <&str>::clone(
-                        x.strip_prefix("Style: ")
-                            .unwrap()
-                            .split(',')
-                            .collect::<Vec<&str>>()
-                            .first()
-                            .unwrap(),
-                    )
-                })
-                .collect::<Vec<&str>>();
-            let values2 = i
-                .split(ssplit)
-                .filter(|&x| x.starts_with("Style: "))
-                .map(|x| x.strip_prefix("Style: ").unwrap().borrow())
-                .collect::<Vec<&str>>();
-            for (i, j) in keys2.into_iter().enumerate() {
-                style.insert(
-                    j.to_string(),
-                    values2.get(i).unwrap().split(',').collect::<Vec<&str>>(),
-                );
+        let mut events = vec![];
+
+        for (i, line) in block_lines.enumerate() {
+            if line.starts_with(';') {
+                continue;
             }
-            for (k, l) in style.clone().into_iter() {
-                if k == *"Format" {
-                    continue;
-                }
-                let styl = SSAStyle {
-                    name: l.first().expect("missing_name").to_string(),
-                    fontname: l.get(1).expect("missing_name").to_string(),
-                    fontsize: l
-                        .get(2)
-                        .expect("missing_name")
-                        .to_string()
-                        .parse::<f32>()
-                        .expect("msg"),
-                    firstcolor: color::ColorType::SSAColor(
-                        Color::from_str(l.get(3).expect("missing_name")).expect("msg"),
-                    ),
-                    secondcolor: color::ColorType::SSAColor(
-                        Color::from_str(l.get(4).expect("missing_name")).expect("msg"),
-                    ),
-                    outlinecolor: color::ColorType::SSAColor(
-                        Color::from_str(l.get(5).expect("missing_name")).expect("msg"),
-                    ),
-                    backgroundcolor: color::ColorType::SSAColor(
-                        Color::from_str(l.get(6).expect("missing_name")).expect("msg"),
-                    ),
-                    bold: l.get(7).expect("missing value") == &"-1",
-                    italic: l.get(8).expect("missing value") == &"-1",
-                    unerline: l.get(9).expect("missing value") == &"-1",
-                    strikeout: l.get(10).expect("missing value") == &"-1",
-                    scalex: l
-                        .get(11)
-                        .expect("Not provided ScaleX")
-                        .parse::<f32>()
-                        .expect("ScaleX value not proper"),
-                    scaley: l
-                        .get(12)
-                        .expect("Not provided ScaleY")
-                        .parse::<f32>()
-                        .expect("ScaleY value not proper"),
-                    spacing: l
-                        .get(13)
-                        .expect("Not provided Spacing")
-                        .parse::<f32>()
-                        .expect("Spacing value not proper"),
-                    angle: l
-                        .get(14)
-                        .expect("Not provided Spacing")
-                        .parse::<f32>()
-                        .expect("Spacing value not proper"),
-                    borderstyle: l
-                        .get(15)
-                        .expect("Not provided borderstyle")
-                        .parse::<i8>()
-                        .expect("borderstyle value not proper"),
-                    outline: l
-                        .get(16)
-                        .expect("Not provided Spacing")
-                        .parse::<f32>()
-                        .expect("Spacing value not proper"),
-                    shadow: l
-                        .get(17)
-                        .expect("Not provided Spacing")
-                        .parse::<f32>()
-                        .expect("Spacing value not proper"),
-                    alignment: Alignment::infer_from_str(l.get(18).expect("Not provided Spacing"))
-                        .unwrap(),
-                    lmargin: l
-                        .get(19)
-                        .expect("Not provided lmargin")
-                        .parse::<i32>()
-                        .expect("lmargin value not proper"),
-                    rmargin: l
-                        .get(20)
-                        .expect("Not provided rmargin")
-                        .parse::<i32>()
-                        .expect("rmargin value not proper"),
-                    vmargin: l
-                        .get(21)
-                        .expect("Not provided vmargin")
-                        .parse::<i32>()
-                        .expect("vmargin value not proper"),
-                    alpha: 0,
-                    encoding: l
-                        .get(22)
-                        .expect("Not provided encoding")
-                        .parse::<i32>()
-                        .expect("encoding value not proper"),
-                    drawing: false,
-                };
-                sub.styles.push(styl);
-            }
+
+            let Some((line_type, line)) = line.split_once(':') else {
+                return Err(Error {
+                    line: 2 + i,
+                    kind: SSAErrorKind::Parse("delimiter ':' missing".to_string()),
+                });
+            };
+            let line_list: Vec<&str> = line.trim().splitn(10, ',').collect();
+
+            events.push(SSAEvent {
+                layer: get_line_value(
+                    &headers,
+                    "Layer",
+                    &line_list,
+                    header_line,
+                    header_line + 1 + i,
+                )?
+                .parse()
+                .map_err(|e| map_parse_int_err(e, header_line + 1 + i))?,
+                start: Time::parse(
+                    get_line_value(
+                        &headers,
+                        "Start",
+                        &line_list,
+                        header_line,
+                        header_line + 1 + i,
+                    )?,
+                    TIME_FORMAT,
+                )
+                .map_err(|e| Error {
+                    line: header_line + 1 + i,
+                    kind: SSAErrorKind::Parse(e.to_string()),
+                })?,
+                end: Time::parse(
+                    get_line_value(
+                        &headers,
+                        "End",
+                        &line_list,
+                        header_line,
+                        header_line + 1 + i,
+                    )?,
+                    TIME_FORMAT,
+                )
+                .map_err(|e| Error {
+                    line: header_line + 1 + i,
+                    kind: SSAErrorKind::Parse(e.to_string()),
+                })?,
+                style: get_line_value(
+                    &headers,
+                    "Style",
+                    &line_list,
+                    header_line,
+                    header_line + 1 + i,
+                )?
+                .to_string(),
+                name: get_line_value(
+                    &headers,
+                    "Name",
+                    &line_list,
+                    header_line,
+                    header_line + 1 + i,
+                )?
+                .to_string(),
+                margin_l: get_line_value(
+                    &headers,
+                    "MarginL",
+                    &line_list,
+                    header_line,
+                    header_line + 1 + i,
+                )?
+                .parse()
+                .map_err(|e| map_parse_float_err(e, header_line + 1 + i))?,
+                margin_r: get_line_value(
+                    &headers,
+                    "MarginR",
+                    &line_list,
+                    header_line,
+                    header_line + 1 + i,
+                )?
+                .parse()
+                .map_err(|e| map_parse_float_err(e, header_line + 1 + i))?,
+                margin_v: get_line_value(
+                    &headers,
+                    "MarginV",
+                    &line_list,
+                    header_line,
+                    header_line + 1 + i,
+                )?
+                .parse()
+                .map_err(|e| map_parse_float_err(e, header_line + 1 + i))?,
+                effect: get_line_value(
+                    &headers,
+                    "Effect",
+                    &line_list,
+                    header_line,
+                    header_line + 1 + i,
+                )?
+                .to_string(),
+                text: get_line_value(
+                    &headers,
+                    "Text",
+                    &line_list,
+                    header_line,
+                    header_line + 1 + i,
+                )?
+                .to_string(),
+                line_type: match line_type {
+                    "Dialogue" => SSAEventLineType::Dialogue,
+                    "Comment" => SSAEventLineType::Comment,
+                    _ => SSAEventLineType::Other(line_type.to_string()),
+                },
+            })
         }
-        if i.contains("[Script Info]") {
-            sub.info.clear();
-            for j in i.split(ssplit).collect::<Vec<&str>>().iter() {
-                let line = j.split_once(':').unwrap_or(("", ""));
-                sub.info
-                    .insert(line.0.to_string(), line.1.trim().to_string());
-            }
-            sub.info.remove("");
-            if !sub.info.contains_key("ScaledBorderAndShadows") {
-                sub.info
-                    .insert("ScaledBorderAndShadows".to_string(), "yes".to_string());
-            }
+
+        Ok(events)
+    }
+
+    pub(super) fn parse_fonts_block<'a, I: Iterator<Item = &'a str>>(
+        block_lines: I,
+    ) -> Result<Vec<String>> {
+        let mut fonts = vec![];
+
+        for (i, line) in block_lines.enumerate() {
+            let Some(line) = line.strip_prefix("fontname:") else {
+                return Err(Error {
+                    line: 1 + i,
+                    kind: SSAErrorKind::Parse("fonts line must start with 'fontname:'".to_string()),
+                });
+            };
+            fonts.push(line.trim().to_string())
         }
-        if i.contains("[Events]") {
-            sub.events.clear();
-            for j in i.split(ssplit) {
-                if j.starts_with("Dialogue:") {
-                    let mut ev = SSAEvent::default();
-                    let line = j
-                        .strip_prefix("Dialogue: ")
-                        .unwrap()
-                        .splitn(10, ',')
-                        .collect::<Vec<&str>>();
-                    ev.layer = line
-                        .first()
-                        .unwrap()
-                        .parse::<i32>()
-                        .expect("Failed to parse layer");
-                    ev.line_start = Time::from_str(line.get(1).unwrap()).unwrap();
-                    ev.line_end = Time::from_str(line.get(2).unwrap()).unwrap();
-                    ev.style = line.get(3).unwrap().to_string();
-                    ev.name = line.get(4).unwrap().to_string();
-                    ev.lmargin = line
-                        .get(5)
-                        .unwrap()
-                        .to_string()
-                        .parse::<f32>()
-                        .expect("couldn't conv to float");
-                    ev.rmargin = line
-                        .get(6)
-                        .unwrap()
-                        .to_string()
-                        .parse::<f32>()
-                        .expect("couldn't conv to float");
-                    ev.vmargin = line
-                        .get(7)
-                        .unwrap()
-                        .to_string()
-                        .parse::<f32>()
-                        .expect("couldn't conv to float");
-                    ev.effect = line.get(8).unwrap().to_string();
-                    ev.line_text = line.get(9).unwrap().to_string();
-                    sub.events.push(ev);
-                }
-            }
+
+        Ok(fonts)
+    }
+
+    pub(super) fn parse_graphics_block<'a, I: Iterator<Item = &'a str>>(
+        block_lines: I,
+    ) -> Result<Vec<String>> {
+        let mut graphics = vec![];
+
+        for (i, line) in block_lines.enumerate() {
+            let Some(line) = line.strip_prefix("filename:") else {
+                return Err(Error {
+                    line: 1 + i,
+                    kind: SSAErrorKind::Parse(
+                        "graphics line must start with 'filename:'".to_string(),
+                    ),
+                });
+            };
+            graphics.push(line.trim().to_string())
+        }
+
+        Ok(graphics)
+    }
+
+    #[allow(clippy::ptr_arg)]
+    fn get_line_value<'a>(
+        headers: &Vec<&str>,
+        name: &str,
+        list: &'a Vec<&str>,
+        header_line: usize,
+        current_line: usize,
+    ) -> Result<&'a &'a str> {
+        let pos = headers.iter().position(|h| *h == name).ok_or(Error {
+            line: header_line,
+            kind: SSAErrorKind::MissingHeader(name.to_string()),
+        })?;
+        list.get(pos).ok_or(Error {
+            line: current_line,
+            kind: SSAErrorKind::Parse(format!("no value for header '{}'", name)),
+        })
+    }
+    fn parse_str_to_bool(s: &str, line: usize) -> Result<bool> {
+        match s {
+            "0" => Ok(false),
+            "-1" => Ok(true),
+            _ => Err(Error {
+                line,
+                kind: SSAErrorKind::Parse(
+                    "boolean value must be '-1 (true) or '0' (false)".to_string(),
+                ),
+            }),
         }
     }
-    sub
-}
-
-/// Parses the given [Path] into a [SSAFile].
-pub fn parse_from_file<P: AsRef<Path>>(file: P) -> Result<SSAFile, std::io::Error> {
-    Ok(parse(fs::read_to_string(file)?))
+    fn map_parse_int_err(e: ParseIntError, line: usize) -> Error {
+        Error {
+            line,
+            kind: SSAErrorKind::Parse(e.to_string()),
+        }
+    }
+    fn map_parse_float_err(e: ParseFloatError, line: usize) -> Error {
+        Error {
+            line,
+            kind: SSAErrorKind::Parse(e.to_string()),
+        }
+    }
 }

@@ -4,6 +4,4 @@
 /*.srt
 /*.ssa
 /.vscode
-/tests/fixtures/res*
-/tests/fixtures/doc*
-/tests/fixtures/ex*
+/tests/fixtures/from_*

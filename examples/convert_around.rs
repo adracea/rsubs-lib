@@ -1,19 +1,18 @@
-use std::str::FromStr;
+use rsubs_lib::{SRT, SSA, VTT};
+use std::fs;
 
-use rsubs_lib::srt;
-use rsubs_lib::ssa;
-use rsubs_lib::vtt;
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let srt_content = fs::read_to_string("./tests/fixtures/test.srt")?;
+    let srt = SRT::parse(srt_content)?;
+    fs::write("./tests/fixtures/ex_test_1.vtt", srt.to_vtt().to_string())?;
 
-fn main() {
-    vtt::VTTFile::from(srt::SRTFile::from_str("./tests/fixtures/test.srt").unwrap()) // Can read either a file or a string
-        // converts file to WEBVTT
-        .to_file("./tests/fixtures/ex_test_1.vtt") // Writes the converted subtitle to a file
-        .unwrap();
-    ssa::SSAFile::from(vtt::parse_from_file("./tests/fixtures/test.vtt".to_string()).unwrap()) // converts file to SSA/ASS
-        .to_file("./tests/fixtures/ex_test_1.ass")
-        .unwrap();
-    srt::SRTFile::from(ssa::parse_from_file("./tests/fixtures/test.ass".to_string()).unwrap())
-        // converts file to SRT
-        .to_file("./tests/fixtures/ex_test_1.srt")
-        .unwrap();
+    let vtt_content = fs::read_to_string("./tests/fixtures/test.vtt")?;
+    let vtt = VTT::parse(vtt_content)?;
+    fs::write("./tests/fixtures/ex_test_1.ass", vtt.to_ssa().to_string())?;
+
+    let ssa_content = fs::read_to_string("./tests/fixtures/test.ass")?;
+    let ssa = SSA::parse(ssa_content)?;
+    fs::write("./tests/fixtures/ex_test_1.srt", ssa.to_srt().to_string())?;
+
+    Ok(())
 }

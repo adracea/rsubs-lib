@@ -1,16 +1,21 @@
-use std::str::FromStr;
+use rsubs_lib::util::Color;
+use rsubs_lib::VTT;
+use std::fs;
 
-use rsubs_lib::{vtt::VTTFile, Subtitle};
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let content = fs::read_to_string("tests/fixtures/test.srt")?;
+    let mut vtt = VTT::parse(content)?;
 
-fn main() {
-    let mut sub: VTTFile = Subtitle::from_str("tests/fixtures/test.srt")
-        .unwrap()
-        .into();
-    for style in sub.styles.iter_mut() {
-        style.color = rsubs_lib::util::color::ColorType::VTTColor0A(rsubs_lib::util::color::RED);
+    for style in &mut vtt.styles {
+        style.entries.insert(
+            "color".to_string(),
+            Color::new(255, 0, 0, 255).to_vtt_string(),
+        );
     }
-    for line in sub.lines.iter_mut() {
-        line.line_text = line.line_text.clone() + "!!!!!!";
+    for line in &mut vtt.lines {
+        line.text.push_str("!!!!!!")
     }
-    sub.to_file("result.vtt").unwrap();
+
+    fs::write("result.vtt", vtt.to_string())?;
+    Ok(())
 }

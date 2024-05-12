@@ -24,11 +24,6 @@ color: #ffffff;
 font-family: "Arial", sans-serif;
 }
 
-::cue{
-color: #ffffff;
-font-family: "Arial", sans-serif;
-}
-
 00:11.000 --> 00:13.000
 <v Roger Bingham>We are in New York City
 
@@ -54,15 +49,13 @@ aa
 00:27.000 --> 00:30.000
 <v Roger Bingham>And I want to do a follow-up on the last conversation we did.
 
-00:30.000 --> 00:31.500 position:30%,left align:right size:50% line:12
+00:30.000 --> 00:31.500 position:30% left align:right size:50% line:12
 <v Roger Bingham>When we e-mailed—
 
 00:30.500 --> 00:32.500 align:left size:50% position:030%
 <v Neil deGrasse Tyson>Didn’t we talk about enough in that conversation?
 <v Neil deGrasse Tyson>Didn’t we talk about enough in that conversation?
 <v Neil deGrasse Tyson>Didn’t we talk about enough in that conversation?
-
-
 
 00:32.000 --> 00:35.500 align:right size:50%
 <v Roger Bingham>No! No no no no; 'cos 'cos obviously 'cos
