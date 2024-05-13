@@ -327,7 +327,7 @@ impl SSA {
                 .replace("{\\i0}", "</i>")
                 .replace("{\\u1}", "<u>")
                 .replace("{\\u0}", "</u>")
-                .replace("\\N", "\n");
+                .replace("\\N", "\r\n");
 
             if !event.style.is_empty() {
                 if let Some(style) = self.styles.iter().find(|s| s.name == event.style) {

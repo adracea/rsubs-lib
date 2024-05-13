@@ -106,7 +106,7 @@ impl SRT {
             line_num += 1;
             line_num += block_lines.len();
             // text
-            let text = block_lines.collect::<Vec<&str>>().join("\n");
+            let text = block_lines.collect::<Vec<&str>>().join("\r\n");
 
             lines.push(SRTLine {
                 sequence_number,
@@ -135,7 +135,7 @@ impl SRT {
                     identifier: Some(l.sequence_number.to_string()),
                     start: l.start,
                     end: l.end,
-                    text: l.text.clone(),
+                    text: l.text.replace("\r\n", "\n"),
                     ..Default::default()
                 })
                 .collect(),
@@ -166,9 +166,9 @@ impl Display for SRT {
             "{}",
             blocks
                 .into_iter()
-                .map(|b| b.join("\n"))
+                .map(|b| b.join("\r\n"))
                 .collect::<Vec<String>>()
-                .join("\n\n")
+                .join("\r\n\r\n")
         )
     }
 }

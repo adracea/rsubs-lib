@@ -30,7 +30,8 @@ from the American Museum of Natural History
 
 4
 00:00:18,000 --> 00:00:20,000
-And with me is Neil deGrasse Tyson";
+And with me is Neil deGrasse Tyson"
+        .replace('\n', "\r\n");
     let vtt = VTT::parse(SIMPLE).unwrap();
     assert_eq!(vtt.to_srt().to_string(), expected)
 }
@@ -69,7 +70,8 @@ fn convert_styling_inline_to_srt() {
 
 2
 00:00:35,500 --> 00:00:38,000
-You know I’m so excited my glasses are falling off here.";
+You know I’m so excited my glasses are falling off here."
+        .replace('\n', "\r\n");
     let vtt = VTT::parse(STYLING_INLINE).unwrap();
     assert_eq!(vtt.to_srt().to_string(), expected)
 }
@@ -127,7 +129,8 @@ And I want to do a follow-up on the last conversation we did.
 
 4
 00:00:30,000 --> 00:00:31,500
-When we e-mailed—";
+When we e-mailed—"
+        .replace('\n', "\r\n");
     let vtt = VTT::parse(STYLING_GLOBAL).unwrap();
     assert_eq!(vtt.to_srt().to_string(), expected)
 }
@@ -163,7 +166,8 @@ fn convert_multiline_to_srt() {
 00:00:00,000 --> 00:00:02,000
 Lorem Ipsum 1
 Lorem Ipsum 2
-Lorem Ipsum 3";
+Lorem Ipsum 3"
+        .replace('\n', "\r\n");
     let vtt = VTT::parse(MULTILINE).unwrap();
     assert_eq!(vtt.to_srt().to_string(), expected)
 }

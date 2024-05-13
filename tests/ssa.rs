@@ -29,7 +29,8 @@ Lorem Ipsum3
 
 4
 00:00:14,200 --> 00:00:16,200
-Lorem Ipsum4";
+Lorem Ipsum4"
+        .replace('\n', "\r\n");
     let ssa = SSA::parse(SIMPLE).unwrap();
     assert_eq!(ssa.to_srt().to_string(), expected)
 }
@@ -82,7 +83,8 @@ fn convert_styling_inline_to_srt() {
 
 3
 00:00:06,200 --> 00:00:08,200
-Lorem Ipsum3";
+Lorem Ipsum3"
+        .replace('\n', "\r\n");
     let ssa = SSA::parse(STYLING_INLINE).unwrap();
     assert_eq!(ssa.to_srt().to_string(), expected)
 }
@@ -130,7 +132,8 @@ fn convert_styling_global_to_srt() {
 
 3
 00:00:06,200 --> 00:00:08,200
-<b>Lorem Ipsum3</b>";
+<b>Lorem Ipsum3</b>"
+        .replace('\n', "\r\n");
     let ssa = SSA::parse(STYLING_GLOBAL).unwrap();
     assert_eq!(ssa.to_srt().to_string(), expected)
 }
@@ -175,7 +178,8 @@ Lorem Ipsum3
 
 2
 00:00:02,200 --> 00:00:04,200
-Lorem Ipsum4";
+Lorem Ipsum4"
+        .replace('\n', "\r\n");
     let ssa = SSA::parse(MULTILINE).unwrap();
     assert_eq!(ssa.to_srt().to_string(), expected)
 }

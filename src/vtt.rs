@@ -268,7 +268,7 @@ impl VTT {
                 sequence_number: i as u32 + 1,
                 start: line.start,
                 end: line.end,
-                text,
+                text: text.replace('\n', "\r\n"),
             })
         }
 
