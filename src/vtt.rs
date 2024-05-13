@@ -10,7 +10,7 @@ use crate::util::{Alignment, Color, BLACK, TRANSPARENT, WHITE};
 use regex::Regex;
 use serde::Deserialize;
 use serde::Serialize;
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::fmt::Display;
 use time::Time;
 
@@ -133,6 +133,7 @@ impl VTT {
     /// When converting to SSAFile, information about the VTTStyles is maintained but not applied.
     pub fn to_ssa(&self) -> SSA {
         let speaker_regex: Regex = Regex::new(r"(?m)^<v.*?\s(?P<speaker>.*?)>").unwrap();
+        let xml_replace_regex: Regex = Regex::new(r"(?m)<.*?>").unwrap();
 
         let mut default_style = SSAStyle {
             name: "Default".to_string(),
@@ -221,28 +222,16 @@ impl VTT {
                 (line.text.clone(), None)
             };
 
-            let mut replace_entries = vec![];
-            for (open, close) in Self::extract_xml_pairs(&text) {
-                let (open_replace, close_replace) = match open.0 {
-                    "b" => ("{\\b1}", "{\\b0}"),
-                    "i" => ("{\\i1}", "{\\i0}"),
-                    "u" => ("{\\u1}", "{\\u0}"),
-                    _ => ("", ""),
-                };
-                replace_entries.push((open_replace, open.1, open.2));
-                replace_entries.push((close_replace, close.1, close.2))
-            }
-
-            let mut replace_offset = 0;
-            for replace_entry in replace_entries {
-                let range_start = (replace_entry.1 as i32 + replace_offset) as usize;
-                let range_end = (replace_entry.2 as i32 + replace_offset) as usize;
-
-                text.replace_range(range_start..range_end, replace_entry.0);
-
-                replace_offset -=
-                    (replace_entry.2 - replace_entry.1) as i32 - replace_entry.0.len() as i32;
-            }
+            text = text
+                .replace("<b>", "{\\b1}")
+                .replace("</b>", "{\\b0}")
+                .replace("<i>", "{\\i1}")
+                .replace("</i>", "{\\i0}")
+                .replace("<s>", "{\\s1}")
+                .replace("</s>", "{\\s0}")
+                .replace("<u>", "{\\u1}")
+                .replace("</u>", "{\\u0}");
+            text = xml_replace_regex.replace_all(&text, "").to_string();
 
             events.push(SSAEvent {
                 start: line.start,
@@ -271,27 +260,9 @@ impl VTT {
         let mut lines = vec![];
 
         for (i, line) in self.lines.iter().enumerate() {
-            let mut text = speaker_regex
+            let text = speaker_regex
                 .replace_all(line.text.as_str(), "")
                 .to_string();
-
-            let mut remove_entries = vec![];
-            for (open, close) in Self::extract_xml_pairs(&text) {
-                if !["b", "i", "u"].contains(&open.0) {
-                    remove_entries.push((open.1, open.2));
-                    remove_entries.push((close.1, close.2))
-                }
-            }
-
-            let mut replace_offset = 0;
-            for remove_entry in remove_entries {
-                let range_start = remove_entry.0 + replace_offset;
-                let range_end = remove_entry.1 + replace_offset;
-
-                text.replace_range(range_start..range_end, "");
-
-                replace_offset += remove_entry.1 - remove_entry.0;
-            }
 
             lines.push(SRTLine {
                 sequence_number: i as u32 + 1,
@@ -302,35 +273,6 @@ impl VTT {
         }
 
         SRT { lines }
-    }
-
-    #[allow(clippy::type_complexity)]
-    fn extract_xml_pairs(s: &str) -> Vec<((&str, usize, usize), (&str, usize, usize))> {
-        let xml_tag_regex: Regex = Regex::new(r"<(?P<content>.*?)>").unwrap();
-
-        let mut pairs = vec![];
-        let mut open_tags: HashMap<&str, VecDeque<(&str, usize, usize)>> = HashMap::new();
-        for capture in xml_tag_regex.captures_iter(s) {
-            let content = capture.name("content").unwrap().as_str().trim();
-            let group = capture.get(0).unwrap();
-            if let Some(content) = content.strip_prefix('/') {
-                let Some(open_tag_queue) = open_tags.get_mut(content) else {
-                    continue;
-                };
-                pairs.push((
-                    open_tag_queue.pop_front().unwrap(),
-                    ("/", group.start(), group.end()),
-                ))
-            } else {
-                open_tags.entry(content).or_default().push_front((
-                    content,
-                    group.start(),
-                    group.end(),
-                ))
-            }
-        }
-
-        pairs
     }
 }
 
