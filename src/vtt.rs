@@ -1,698 +1,612 @@
 //! Implements helpers for `.vtt`.
 //!
-//! It describes the [VTTStyle], [VTTFile] and [VTTLine] structs and
+//! It describes the [VTTStyle], [VTT] and [VTTLine] structs and
 //! provides the [parse] function.
 
-use super::srt::SRTLine;
-use super::ssa::{SSAEvent, SSAFile, SSAStyle};
-use crate::srt::SRTFile;
-use crate::util::color::ColorType;
-use crate::util::{color, color::Color, time::Time};
+use super::srt::{SRTLine, SRT};
+use super::ssa::{SSAEvent, SSAInfo, SSAStyle, SSA};
+use crate::error;
+use crate::util::{Alignment, Color, BLACK, TRANSPARENT, WHITE};
 use regex::Regex;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::fmt::Display;
-use std::fs;
-use std::fs::File;
-use std::io::{Read, Write};
-use std::path::Path;
-use std::str::FromStr;
+use time::Time;
 
 /// The VTTStyle contains information that generally composes the `::cue` header
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, Deserialize, Serialize)]
 pub struct VTTStyle {
-    pub color: ColorType,
-    pub font_family: String,
-    pub font_size: String,
-    pub text_shadow: String,
-    pub background_color: ColorType,
-    pub name: Option<String>,
-    pub others: HashMap<String, String>,
+    pub selector: Option<String>,
+    pub entries: HashMap<String, String>,
 }
 
-impl Default for VTTStyle {
-    fn default() -> Self {
-        VTTStyle {
-            color: ColorType::VTTColor0A(color::WHITE),
-            font_family: "\"Trebuchet MS\"".to_string(),
-            font_size: "020px".to_string(),
-            text_shadow: "#000000ff -2px 0px 2px, #000000ff 0px 2px 2px, #000000ff 0px -2px 2px, #000000ff 2px 0px 2px".to_string(),
-            background_color: ColorType::VTTColor(color::TRANSPARENT),
-            name: None,
-            others: HashMap::new(),
-        }
-    }
-}
 /// The VTTLine contains information about the line itself as well as the positional information of the line
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct VTTLine {
-    pub line_number: String,
-    pub style: Option<String>,
-    pub line_start: Time,
-    pub line_end: Time,
-    pub position: Option<VTTPos>,
-    pub line_text: String,
+    pub identifier: Option<String>,
+    pub start: Time,
+    pub end: Time,
+    pub settings: HashMap<String, Option<String>>,
+    pub text: String,
 }
+
 impl Default for VTTLine {
     fn default() -> Self {
-        VTTLine {
-            line_number: "0".to_string(),
-            style: Some("Default".to_string()),
-            line_start: Time::from_str("00:00:00.000").unwrap(),
-            line_end: Time::from_str("00:00:02.000").unwrap(),
-            position: Some(VTTPos::default()),
-            line_text: "Lorem Ipsum".to_string(),
+        Self {
+            identifier: None,
+            start: Time::from_hms(0, 0, 0).unwrap(),
+            end: Time::from_hms(0, 0, 0).unwrap(),
+            settings: Default::default(),
+            text: "".to_string(),
         }
     }
 }
 
-/// Describes how the line is positioned on screen. By default it's all 0 with a center alignment.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct VTTPos {
-    pub pos: i32,
-    pub pos_align: Option<String>,
-    pub size: i32,
-    pub line: i32,
-    pub line_align: Option<String>,
-    pub align: String,
+#[derive(Clone, Debug, Default, PartialEq, Deserialize, Serialize)]
+pub struct VTTRegion {
+    pub id: Option<String>,
+    pub width: Option<f32>,
+    pub lines: Option<u32>,
+    pub region_anchor: Option<(f32, f32)>,
+    pub viewport_anchor: Option<(f32, f32)>,
+    pub scroll: bool,
 }
-impl Default for VTTPos {
-    fn default() -> Self {
-        VTTPos {
-            pos: 0,
-            pos_align: None,
-            size: 0,
-            line: 0,
-            line_align: None,
-            align: "center".to_string(),
-        }
-    }
-}
+impl Eq for VTTRegion {}
 
 /// Contains [VTTStyle]s and [VTTLine]s
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct VTTFile {
+#[derive(Clone, Debug, Default, Eq, PartialEq, Deserialize, Serialize)]
+pub struct VTT {
+    pub regions: Vec<VTTRegion>,
     pub styles: Vec<VTTStyle>,
     pub lines: Vec<VTTLine>,
 }
-impl Default for VTTFile {
-    fn default() -> Self {
-        VTTFile {
-            styles: vec![VTTStyle::default()],
-            lines: vec![VTTLine::default()],
-        }
-    }
-}
 
-impl VTTFile {
-    /// Takes the path of the file in the form of a [String] to be written to as input.
-    pub fn to_file<P: AsRef<Path>>(self, path: P) -> std::io::Result<()> {
-        let mut w = File::options()
-            .write(true)
-            .create(true)
-            .open(path)
-            .expect("File can't be created");
-        write!(w, "{self}")?;
-        Ok(())
+impl VTT {
+    /// Parses the given [String] into as [VTT].
+    pub fn parse<S: AsRef<str>>(content: S) -> Result<VTT, VTTError> {
+        let mut line_num = 0;
+
+        let mut regions = vec![];
+        let mut styles = vec![];
+        let mut lines = vec![];
+
+        let mut blocks = vec![vec![]];
+        for line in content.as_ref().lines() {
+            if line.trim().is_empty() {
+                if !blocks.last().unwrap().is_empty() {
+                    blocks.push(vec![])
+                }
+            } else {
+                blocks.last_mut().unwrap().push(line)
+            }
+        }
+        if blocks.last().is_some_and(|b| b.is_empty()) {
+            blocks.remove(blocks.len() - 1);
+        }
+
+        parse::parse_start(blocks.remove(0).into_iter())
+            .map_err(|e| VTTError::new(e.kind, line_num + e.line))?;
+
+        line_num += 1;
+        for mut block in blocks {
+            line_num += 1;
+
+            let block_len = block.len();
+            let (first_word, _) = block[0].split_once(' ').unwrap_or((block[0], ""));
+
+            match first_word {
+                // parsing the 'NOTE' block is very easy, but it cannot be useful represented how the
+                // VTT struct is structured, so it gets just skipped
+                "NOTE" => (),
+                "REGION" => {
+                    block.remove(0);
+                    line_num += 1;
+                    regions.push(
+                        parse::parse_region_block(block.into_iter())
+                            .map_err(|e| VTTError::new(e.kind, line_num + e.line))?,
+                    )
+                }
+                "STYLE" => {
+                    block[0] = &block[0][5..];
+                    styles.push(
+                        parse::parse_style_block(block.join("\n").trim())
+                            .map_err(|e| VTTError::new(e.kind, line_num + e.line))?,
+                    );
+                }
+                _ => lines.push(
+                    parse::parse_cue_block(block.into_iter())
+                        .map_err(|e| VTTError::new(e.kind, line_num + e.line))?,
+                ),
+            }
+
+            line_num += block_len
+        }
+
+        Ok(VTT {
+            regions,
+            styles,
+            lines,
+        })
     }
 
     /// When converting to SSAFile, information about the VTTStyles is maintained but not applied.
-    pub fn to_ass(self) -> SSAFile {
-        let mut ssa = SSAFile::default();
-        ssa.events.clear();
-        ssa.styles.clear();
-        for (_ctr, i) in self.styles.into_iter().enumerate() {
-            let styl = SSAStyle {
-                firstcolor: if i.color.get_color().a == 255 {
-                    color::ColorType::SSAColor(Color {
-                        r: i.color.get_color().r,
-                        g: i.color.get_color().g,
-                        b: i.color.get_color().b,
-                        a: 0,
-                    })
-                } else {
-                    color::ColorType::SSAColor(i.color.get_color())
-                },
-                fontname: i
-                    .font_family
-                    .split('\"')
-                    .collect::<Vec<&str>>()
-                    .get(1)
-                    .unwrap_or(&"Arial")
-                    .to_string(),
-                backgroundcolor: color::ColorType::SSAColor(i.background_color.get_color()),
-                name: i.name.unwrap_or_else(|| "Default".to_string()),
-                fontsize: i
-                    .font_size
-                    .strip_suffix("px")
-                    .unwrap_or(&i.font_size.to_string())
-                    .to_string()
-                    .parse::<f32>()
-                    .unwrap_or(20.0),
-                ..Default::default()
-            };
-            ssa.styles.push(styl)
+    pub fn to_ssa(&self) -> SSA {
+        let speaker_regex: Regex = Regex::new(r"(?m)^<v.*?\s(?P<speaker>.*?)>").unwrap();
+        let xml_replace_regex: Regex = Regex::new(r"(?m)<.*?>").unwrap();
+
+        let mut default_style = SSAStyle {
+            name: "Default".to_string(),
+            fontname: "Arial".to_string(),
+            fontsize: 20.0,
+            primary_color: WHITE,
+            secondary_color: BLACK,
+            outline_color: TRANSPARENT,
+            back_color: TRANSPARENT,
+            alignment: Alignment::BottomCenter,
+            ..Default::default()
+        };
+        for style in &self.styles {
+            // style settings that doesn't apply for whole lines cannot be represented as SSAStyle
+            if style.selector.is_some() {
+                continue;
+            }
+            // text color. skips if the VTT color can't be read
+            if let Some(color) = style.entries.get("color") {
+                if let Ok(primary_color) = Color::from_vtt(color) {
+                    default_style.primary_color = primary_color
+                }
+            }
+            // background color. skips if the VTT color can't be read
+            if let Some(background_color) = style.entries.get("background-color") {
+                if let Ok(back_color) = Color::from_vtt(background_color) {
+                    default_style.back_color = back_color
+                }
+            }
+            // font size. can only be converted to SSA if it is given as pixels, in all other
+            // cases it will be skipped
+            if let Some(font_size) = style.entries.get("font-size") {
+                let font_size = font_size.trim_end_matches("px");
+                if let Ok(font_size) = font_size.parse() {
+                    default_style.fontsize = font_size
+                }
+            }
+            // italic text
+            if style
+                .entries
+                .get("font-style")
+                .is_some_and(|fs| fs == "italic")
+            {
+                default_style.italic = true;
+            }
+            // bold text
+            if style
+                .entries
+                .get("font-weight")
+                .is_some_and(|fw| fw.starts_with("bold"))
+            {
+                default_style.bold = true;
+            }
+            // underline & strikeout
+            if let Some(text_decoration) = style.entries.get("text-decoration") {
+                if text_decoration.contains("underline") {
+                    default_style.underline = true
+                }
+                if text_decoration.contains("line-through") {
+                    default_style.strikeout = true
+                }
+            }
+            // spacing between characters. can only be converted to SSA if it is given as pixels, in
+            // all other cases it will be skipped
+            if let Some(letter_spacing) = style.entries.get("letter-spacing") {
+                let letter_spacing = letter_spacing.trim_end_matches("px");
+                if let Ok(letter_spacing) = letter_spacing.parse() {
+                    default_style.spacing = letter_spacing
+                }
+            }
         }
-        for (_ctr, i) in self.lines.into_iter().enumerate() {
-            let mut line = SSAEvent {
-                line_end: i.line_end,
-                line_start: i.line_start,
-                line_text: i.line_text.clone(),
-                ..Default::default()
+
+        let mut events = vec![];
+        for line in &self.lines {
+            let mut captures = speaker_regex.captures_iter(&line.text);
+            let first_capture = captures.next();
+            let second_capture = captures.next();
+
+            let (mut text, speaker) = if first_capture.is_some() && second_capture.is_some() {
+                (speaker_regex.replace_all(&line.text, "").to_string(), None)
+            } else if let Some(c) = first_capture {
+                let text = line.text[c.get(0).unwrap().end()..].to_string();
+                let speaker = c.name("speaker").unwrap().as_str().to_string();
+                (text, Some(speaker))
+            } else {
+                (line.text.clone(), None)
             };
-            line.line_text = replace_invalid_lines(&i.line_text, false).replace("\\N", "\r\n");
-            ssa.events.push(line);
+
+            text = text
+                .replace("<b>", "{\\b1}")
+                .replace("</b>", "{\\b0}")
+                .replace("<i>", "{\\i1}")
+                .replace("</i>", "{\\i0}")
+                .replace("<s>", "{\\s1}")
+                .replace("</s>", "{\\s0}")
+                .replace("<u>", "{\\u1}")
+                .replace("</u>", "{\\u0}");
+            text = xml_replace_regex.replace_all(&text, "").to_string();
+
+            events.push(SSAEvent {
+                start: line.start,
+                end: line.end,
+                style: "Default".to_string(),
+                name: speaker.unwrap_or_default(),
+                text: text.replace("\r\n", "\\N").replace('\n', "\\N"),
+                ..Default::default()
+            })
         }
-        ssa
+
+        SSA {
+            info: SSAInfo {
+                ..Default::default()
+            },
+            styles: vec![default_style],
+            events,
+            fonts: vec![],
+            graphics: vec![],
+        }
     }
     /// SRT is basically a VTT without the styles
-    pub fn to_srt(self) -> SRTFile {
-        let mut srt = SRTFile::default();
-        srt.lines.clear();
-        for (ctr, i) in self.lines.into_iter().enumerate() {
-            let mut line = SRTLine {
-                line_number: i.line_number.parse::<i32>().unwrap_or(ctr as i32 + 1),
-                line_end: i.line_end,
-                line_start: i.line_start,
-                line_text: i.line_text.clone(),
-            };
-            line.line_text = replace_invalid_lines(&i.line_text, true);
-            srt.lines.push(line);
+    pub fn to_srt(&self) -> SRT {
+        let speaker_regex: Regex = Regex::new(r"(?m)^<v.*?>").unwrap();
+
+        let mut lines = vec![];
+
+        for (i, line) in self.lines.iter().enumerate() {
+            let text = speaker_regex
+                .replace_all(line.text.as_str(), "")
+                .to_string();
+
+            lines.push(SRTLine {
+                sequence_number: i as u32 + 1,
+                start: line.start,
+                end: line.end,
+                text: text.replace('\n', "\r\n"),
+            })
         }
-        srt
+
+        SRT { lines }
     }
 }
 
-impl Display for VTTFile {
+impl Display for VTT {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut s = String::from("WEBVTT\r\n\r\n");
+        let mut blocks = vec![];
 
-        for i in self.clone().styles {
-            let mut style_block: String = "".to_string();
-            if i.name.is_some() {
-                style_block += &("STYLE\r\n::cue(".to_string() + &i.name.unwrap() + ") {\r\n");
+        blocks.push(vec!["WEBVTT".to_string()]);
+
+        for style in &self.styles {
+            let mut block = vec![];
+            block.push("STYLE".to_string());
+            if let Some(selector) = &style.selector {
+                block.push(format!("::cue({selector}) {{"))
             } else {
-                style_block += "STYLE\r\n::cue {\r\n";
+                block.push("::cue {".to_string())
             }
-            style_block += &("color: ".to_string() + &i.color.to_string() + ";\r\n");
-            style_block +=
-                &("background-color: ".to_string() + &i.background_color.to_string() + ";\r\n");
-            style_block += &("font-family: ".to_string() + &i.font_family + ";\r\n");
-            style_block += &("font-size: ".to_string() + &i.font_size.to_string() + ";\r\n");
-            style_block += &("text-shadow: ".to_string() + &i.text_shadow.to_string() + ";\r\n");
-            style_block += "}\r\n\r\n";
-            s.push_str(&style_block);
+            for (id, value) in &style.entries {
+                block.push(format!("{id}: {value}"))
+            }
+            block.push("}".to_string());
+
+            blocks.push(block)
         }
-        for (i, j) in self.lines.iter().enumerate() {
-            let mut line_block: String = "".to_string();
-            if j.line_number.is_empty() {
-                line_block += &((i + 1).to_string() + "\r\n")
-            } else {
-                line_block += &(j.line_number.to_string() + "\r\n")
+
+        for line in &self.lines {
+            let mut block = vec![];
+            if let Some(identifier) = &line.identifier {
+                block.push(identifier.clone())
             }
-            line_block += &(j.line_start.to_string() + " --> " + &j.line_end.to_string());
-            if j.position.is_some() {
-                let pos = j.position.clone().unwrap();
-                line_block += &format!(
-                    " position:{:0>3}% size:{:0>3}% line:{} align:{}\r\n",
-                    pos.pos, pos.size, pos.line, pos.align
-                );
+
+            if !line.settings.is_empty() {
+                block.push(format!(
+                    "{} --> {} {}",
+                    line.start.format(parse::TIME_FORMAT).unwrap(),
+                    line.end.format(parse::TIME_FORMAT).unwrap(),
+                    line.settings
+                        .iter()
+                        .map(|(k, v)| v.as_ref().map_or(k.clone(), |v| format!("{k}: {v}")))
+                        .collect::<Vec<String>>()
+                        .join(" ")
+                ))
             } else {
-                line_block += "\r\n";
+                block.push(format!(
+                    "{} --> {}",
+                    line.start.format(parse::TIME_FORMAT).unwrap(),
+                    line.end.format(parse::TIME_FORMAT).unwrap()
+                ))
             }
-            line_block += &(j.line_text.to_string().replace("\\N", "\r\n") + "\r\n\r\n");
-            s.push_str(&line_block);
+            block.push(line.text.clone());
+
+            blocks.push(block)
         }
-        write!(f, "{s}")
+
+        write!(
+            f,
+            "{}",
+            blocks
+                .into_iter()
+                .map(|b| b.join("\n"))
+                .collect::<Vec<String>>()
+                .join("\n\n")
+        )
     }
-}
-/// Replaces strings that are invalid in certain contexts. SSA doesn't support html-like tags
-/// and SRT only support `b`,`i`,`u` representing bold, italics, underline.
-pub fn replace_invalid_lines(str: &str, triggers: bool) -> String {
-    let mut res = String::from(str);
-    let reg = Regex::new(r"<(?P<trigger>.*?)>").expect("Regex Failure");
-    for k in reg.captures_iter(str) {
-        let tag_main = k.get(0).unwrap().as_str();
-        if triggers {
-            let tag_trigger = k.name("trigger").unwrap().as_str();
-            if !["/b", "b", "/i", "i", "/u", "u"].contains(&tag_trigger) {
-                res = res.clone().replace(tag_main, "");
-            }
-        } else {
-            res = res.clone().replace(tag_main, "");
-        }
-    }
-    res
 }
 
-impl From<SSAFile> for VTTFile {
-    fn from(a: SSAFile) -> Self {
-        a.to_vtt()
+mod parse {
+    use super::*;
+    use time::format_description::BorrowedFormatItem;
+    use time::macros::format_description;
+
+    pub(super) struct Error {
+        pub(super) line: usize,
+        pub(super) kind: VTTErrorKind,
     }
-}
-impl From<SRTFile> for VTTFile {
-    fn from(a: SRTFile) -> Self {
-        a.to_vtt()
-    }
-}
-impl FromStr for VTTFile {
-    type Err = std::io::Error;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let path_or_content = s.to_string();
-        let mut b: String = "".to_string();
-        let mut sub: VTTFile = VTTFile::default();
-        if !path_or_content.contains('\n') {
-            if std::fs::read(&path_or_content).is_ok() {
-                let mut f = File::open(path_or_content)?;
-                f.read_to_string(&mut b)?;
-            }
-        } else {
-            b = path_or_content;
+
+    pub(super) const TIME_FORMAT: &[BorrowedFormatItem] =
+        format_description!("[hour]:[minute]:[second].[subsecond digits:3]");
+
+    type Result<T> = std::result::Result<T, Error>;
+
+    pub(super) fn parse_start<'a, I: Iterator<Item = &'a str>>(mut block_lines: I) -> Result<()> {
+        let line = block_lines.next().unwrap();
+        if !line.starts_with("WEBVTT") || block_lines.next().is_some() {
+            return Err(Error {
+                line: 1,
+                kind: VTTErrorKind::InvalidFormat,
+            });
         }
-        let (split, ssplit) = if b.split("\r\n\r\n").count() < 2 {
-            (r"\n{2,}", "\n")
-        } else {
-            (r"((\r\n){2,})", "\r\n")
+        Ok(())
+    }
+    pub(super) fn parse_region_block<'a, I: Iterator<Item = &'a str>>(
+        block_lines: I,
+    ) -> Result<VTTRegion> {
+        let mut region = VTTRegion {
+            id: None,
+            width: None,
+            lines: None,
+            region_anchor: None,
+            viewport_anchor: None,
+            scroll: false,
         };
-        let blank_line_sep = Regex::new(split).expect("Invalid blank line regex");
-        let line_blocks = blank_line_sep.split(&b).collect::<Vec<&str>>();
-        // Unwrapping here is safe because the above split will always have `Some(&[""])`.
-        if !line_blocks.first().unwrap().contains("WEBVTT") {
-            panic!("Not a  WEBVTT file");
-        }
 
-        let mut line_found = false;
-        let mut styles_found = 0;
-        for i in line_blocks {
-            if i.trim().starts_with("::cue") | i.trim().starts_with("STYLE") {
-                let line = i.split(ssplit).collect::<Vec<&str>>();
-                let mut styl = VTTStyle::default();
-                for i in line {
-                    if i.starts_with("color:") {
-                        styl.color = ColorType::VTTColor0A(
-                            Color::from_str(
-                                i.split(": ")
-                                    .collect::<Vec<&str>>()
-                                    .get(1)
-                                    .expect("No Color ")
-                                    .strip_suffix(';')
-                                    .expect("Broken Color"),
-                            )
-                            .unwrap_or_default(),
-                        );
-                    } else if i.starts_with("font-family:") {
-                        styl.font_family = i
-                            .split(": ")
-                            .collect::<Vec<&str>>()
-                            .get(1)
-                            .expect("No Font ")
-                            .strip_suffix(';')
-                            .expect("Broken Font")
-                            .to_string();
-                    } else if i.starts_with("font-size:") {
-                        styl.font_size = i
-                            .split(": ")
-                            .collect::<Vec<&str>>()
-                            .get(1)
-                            .expect("No Font size")
-                            .strip_suffix(';')
-                            .expect("Broken Font size")
-                            .to_string();
-                    } else if i.starts_with("text-shadow:") {
-                        styl.text_shadow = i
-                            .split(": ")
-                            .collect::<Vec<&str>>()
-                            .get(1)
-                            .expect("No Font size")
-                            .strip_suffix(';')
-                            .expect("Broken Font size")
-                            .to_string();
-                    } else if i.starts_with("background-color:") {
-                        styl.background_color = ColorType::VTTColor(
-                            Color::from_str(
-                                i.split(": ")
-                                    .collect::<Vec<&str>>()
-                                    .get(1)
-                                    .expect("No Color ")
-                                    .strip_suffix(';')
-                                    .expect("Broken Color"),
-                            )
-                            .unwrap_or_default(),
-                        );
-                    } else if i.starts_with("::cue(") {
-                        styl.name = Some(
-                            i.split(&['(', ')'])
-                                .collect::<Vec<&str>>()
-                                .get(1)
-                                .unwrap_or(&"Name")
-                                .to_string(),
-                        );
-                    }
+        for (i, line) in block_lines.enumerate() {
+            let (name, value) = line.split_once(':').ok_or(Error {
+                line: 1 + i,
+                kind: VTTErrorKind::Parse("delimiter ':' missing".to_string()),
+            })?;
+
+            match name {
+                "id" => region.id = Some(value.to_string()),
+                "width" => {
+                    region.width = Some(parse_percentage(value).ok_or(Error {
+                        line: 1 + i,
+                        kind: VTTErrorKind::Parse(format!("invalid percentage '{value}'")),
+                    })?)
                 }
-                styles_found += 1;
-                if styles_found == 1 {
-                    sub.styles.clear();
+                "lines" => {
+                    region.lines = Some(value.parse::<u32>().map_err(|e| Error {
+                        line: 1 + i,
+                        kind: VTTErrorKind::Parse(e.to_string()),
+                    })?)
                 }
-                sub.styles.push(styl);
-            } else if i.trim().starts_with("NOTE") || i.trim().starts_with("WEBVTT") {
-                continue;
-            } else {
-                let mut subline = VTTLine::default();
-                let subsplit: Vec<&str> = i.split(ssplit).collect();
-                if !subsplit
-                    .first()
-                    .expect("Failed to parse line number")
-                    .is_empty()
-                {
-                    let mut idxshift: usize = 0;
-                    subline.line_number = if !subsplit
-                        .first()
-                        .expect("Failed to parse line number")
-                        .to_string()
-                        .contains(" --> ")
-                    {
-                        subsplit
-                            .first()
-                            .expect("Failed to parse line number")
-                            .to_string()
-                    } else {
-                        idxshift += 1;
-                        "".to_string()
+                "regionanchor" => {
+                    let Some((a, b)) = value.split_once(',') else {
+                        return Err(Error {
+                            line: 1 + i,
+                            kind: VTTErrorKind::Parse("delimiter ',' missing".to_string()),
+                        });
                     };
-
-                    let mut timesplit = subsplit
-                        .get(1 - idxshift)
-                        .expect("Failed to parse times line")
-                        .split(" --> ");
-                    (subline.line_start, subline.line_end) = (
-                        Time::from_str(timesplit.next().unwrap()).unwrap(),
-                        Time::from_str(
-                            timesplit
-                                .next()
-                                .unwrap()
-                                .to_string()
-                                .splitn(2, ' ')
-                                .collect::<Vec<&str>>()
-                                .first()
-                                .unwrap(),
-                        )
-                        .unwrap(),
-                    );
-                    let mut spos = VTTPos::default();
-                    let posstring: String = subsplit
-                        .get(1 - idxshift)
-                        .expect("Failed to parse times line")
-                        .to_string()
-                        .splitn(4, ' ')
-                        .collect::<Vec<&str>>()
-                        .get(3)
-                        .unwrap_or(&"")
-                        .to_string();
-                    let mut poss: HashMap<String, String> = HashMap::new();
-                    posstring.split(' ').for_each(|x| {
-                        poss.insert(
-                            x.split(':')
-                                .collect::<Vec<&str>>()
-                                .first()
-                                .unwrap_or(&"")
-                                .to_string(),
-                            x.split(':')
-                                .collect::<Vec<&str>>()
-                                .get(1)
-                                .unwrap_or(&"")
-                                .to_string(),
-                        );
-                    });
-                    for (px, py) in poss {
-                        if px == "position" {
-                            let pos_split = py
-                                .replace('%', "")
-                                .split(',')
-                                .map(|s| s.to_owned())
-                                .collect::<Vec<String>>();
-                            spos.pos = pos_split
-                                .first()
-                                .unwrap_or(&"".to_string())
-                                .to_string()
-                                .parse::<i32>()
-                                .expect("number");
-                            if pos_split.len() > 1 {
-                                spos.pos_align =
-                                    Some(pos_split.get(1).unwrap_or(&"".to_string()).to_string());
-                            }
-                        } else if px == "align" {
-                            spos.align = py;
-                        } else if px == "size" {
-                            spos.size = py.replace('%', "").parse::<i32>().expect("number");
-                        } else if px == "line" {
-                            let line_split = py
-                                .replace('%', "")
-                                .split(',')
-                                .map(|s| s.to_owned())
-                                .collect::<Vec<String>>();
-                            spos.line = line_split
-                                .first()
-                                .unwrap_or(&"".to_string())
-                                .to_string()
-                                .parse::<i32>()
-                                .expect("number");
-                            if line_split.len() > 1 {
-                                spos.line_align =
-                                    Some(line_split.get(1).unwrap_or(&"".to_string()).to_string());
-                            }
-                        }
-                    }
-                    subline.position = Some(spos);
-                    subline.line_text = subsplit
-                        .get((2 - idxshift)..)
-                        .expect("Couldn't find text")
-                        .join("\r\n")
-                        .replace("\r\n", "\\N");
-                    if !line_found {
-                        sub.lines.clear();
-                        line_found = true;
-                    }
-                    sub.lines.push(subline)
+                    region.region_anchor = Some((
+                        parse_percentage(a).ok_or(Error {
+                            line: 1 + i,
+                            kind: VTTErrorKind::Parse(format!("invalid percentage '{value}'")),
+                        })?,
+                        parse_percentage(b).ok_or(Error {
+                            line: 1 + i,
+                            kind: VTTErrorKind::Parse(format!("invalid percentage '{value}'")),
+                        })?,
+                    ))
                 }
+                "viewportanchor" => {
+                    let Some((a, b)) = value.split_once(',') else {
+                        return Err(Error {
+                            line: 1 + i,
+                            kind: VTTErrorKind::Parse("delimiter ',' missing".to_string()),
+                        });
+                    };
+                    region.viewport_anchor = Some((
+                        parse_percentage(a).ok_or(Error {
+                            line: 1 + i,
+                            kind: VTTErrorKind::Parse(format!("invalid percentage '{value}'")),
+                        })?,
+                        parse_percentage(b).ok_or(Error {
+                            line: 1 + i,
+                            kind: VTTErrorKind::Parse(format!("invalid percentage '{value}'")),
+                        })?,
+                    ))
+                }
+                "scroll" => {
+                    region.scroll = if value == "up" {
+                        true
+                    } else {
+                        return Err(Error {
+                            line: 1 + i,
+                            kind: VTTErrorKind::Parse("only allowed value is 'up'".to_string()),
+                        });
+                    }
+                }
+                _ => continue,
             }
         }
-        Ok(sub)
-    }
-}
 
-/// Parses the given [String] into a [VTTFile].
-pub fn parse(content: String) -> VTTFile {
-    let mut sub: VTTFile = VTTFile::default();
-    let (split, ssplit) = if content.split("\r\n\r\n").count() < 2 {
-        ("\n\n", "\n")
-    } else {
-        ("\r\n\r\n", "\r\n")
-    };
-    let line_blocks = content.split(split).collect::<Vec<&str>>();
-    // Unwrapping here is safe because the above split will always have `Some(&[""])`.
-    if !line_blocks.first().unwrap().contains("WEBVTT") {
-        panic!("Not a  WEBVTT file");
+        Ok(region)
     }
-    let mut line_found = false;
-    let mut styles_found = 0;
-    for i in line_blocks {
-        if i.trim().starts_with("::cue") | i.trim().starts_with("STYLE") {
-            let line = i.split(ssplit).collect::<Vec<&str>>();
-            let mut styl = VTTStyle::default();
-            for i in line {
-                if i.starts_with("color:") {
-                    styl.color = ColorType::VTTColor0A(
-                        Color::from_str(
-                            i.split(": ")
-                                .collect::<Vec<&str>>()
-                                .get(1)
-                                .expect("No Color ")
-                                .strip_suffix(';')
-                                .expect("Broken Color"),
-                        )
-                        .unwrap_or_default(),
-                    );
-                } else if i.starts_with("font-family:") {
-                    styl.font_family = i
-                        .split(": ")
-                        .collect::<Vec<&str>>()
-                        .get(1)
-                        .expect("No Font ")
-                        .strip_suffix(';')
-                        .expect("Broken Font")
-                        .to_string();
-                } else if i.starts_with("font-size:") {
-                    styl.font_size = i
-                        .split(": ")
-                        .collect::<Vec<&str>>()
-                        .get(1)
-                        .expect("No Font size")
-                        .strip_suffix(';')
-                        .expect("Broken Font size")
-                        .to_string();
-                } else if i.starts_with("text-shadow:") {
-                    styl.text_shadow = i
-                        .split(": ")
-                        .collect::<Vec<&str>>()
-                        .get(1)
-                        .expect("No Font size")
-                        .strip_suffix(';')
-                        .expect("Broken Font size")
-                        .to_string();
-                } else if i.starts_with("background-color:") {
-                    styl.background_color = ColorType::VTTColor(
-                        Color::from_str(
-                            i.split(": ")
-                                .collect::<Vec<&str>>()
-                                .get(1)
-                                .expect("No Color ")
-                                .strip_suffix(';')
-                                .expect("Broken Color"),
-                        )
-                        .unwrap_or_default(),
-                    );
-                } else if i.starts_with("::cue(") {
-                    styl.name = Some(
-                        i.split(&['(', ')'])
-                            .collect::<Vec<&str>>()
-                            .get(1)
-                            .unwrap_or(&"Name")
-                            .to_string(),
-                    );
-                }
-            }
-            styles_found += 1;
-            if styles_found == 1 {
-                sub.styles.clear();
-            }
-            sub.styles.push(styl);
-        } else if i.trim().starts_with("NOTE") || i.trim().starts_with("WEBVTT") {
-            continue;
+    pub(super) fn parse_style_block(block: &str) -> Result<VTTStyle> {
+        let mut selector = None;
+        let mut entries = HashMap::new();
+
+        // check for `::cue` prefix
+        let Some(mut block) = block.strip_prefix("::cue") else {
+            return Err(Error {
+                line: 1,
+                kind: VTTErrorKind::Parse("missing '::cue' prefix".to_string()),
+            });
+        };
+
+        // check if block ends with curly bracket
+        if block.ends_with('}') {
+            block = &block[..block.len() - 1]
         } else {
-            let mut subline = VTTLine::default();
-            let subsplit: Vec<&str> = i.split(ssplit).collect();
-            if !subsplit
-                .first()
-                .expect("Failed to parse line number")
-                .is_empty()
-            {
-                let mut idxshift: usize = 0;
-                subline.line_number = if !subsplit
-                    .first()
-                    .expect("Failed to parse line number")
-                    .to_string()
-                    .contains(" --> ")
-                {
-                    subsplit
-                        .first()
-                        .expect("Failed to parse line number")
-                        .to_string()
-                } else {
-                    idxshift += 1;
-                    "".to_string()
-                };
+            return Err(Error {
+                line: block.split('\n').count(),
+                kind: VTTErrorKind::Parse("missing '}' suffix".to_string()),
+            });
+        }
 
-                let mut timesplit = subsplit
-                    .get(1 - idxshift)
-                    .expect("Failed to parse times line")
-                    .split(" --> ");
-                (subline.line_start, subline.line_end) = (
-                    Time::from_str(timesplit.next().unwrap()).unwrap(),
-                    Time::from_str(
-                        timesplit
-                            .next()
-                            .unwrap()
-                            .to_string()
-                            .splitn(2, ' ')
-                            .collect::<Vec<&str>>()
-                            .first()
-                            .unwrap(),
-                    )
-                    .unwrap(),
-                );
-                let mut spos = VTTPos::default();
-                let posstring: String = subsplit
-                    .get(1 - idxshift)
-                    .expect("Failed to parse times line")
-                    .to_string()
-                    .splitn(4, ' ')
-                    .collect::<Vec<&str>>()
-                    .get(3)
-                    .unwrap_or(&"")
-                    .to_string();
-                let mut poss: HashMap<String, String> = HashMap::new();
-                posstring.split(' ').for_each(|x| {
-                    poss.insert(
-                        x.split(':')
-                            .collect::<Vec<&str>>()
-                            .first()
-                            .unwrap_or(&"")
-                            .to_string(),
-                        x.split(':')
-                            .collect::<Vec<&str>>()
-                            .get(1)
-                            .unwrap_or(&"")
-                            .to_string(),
-                    );
+        // extract selector in brackets if existent
+        block = block.trim_start();
+        if block.starts_with('(') {
+            let Some(closing_idx) = block.find(|c| c == ')') else {
+                return Err(Error {
+                    line: 1,
+                    kind: VTTErrorKind::Parse("selector isn't closed".to_string()),
                 });
-                for (px, py) in poss {
-                    if px == "position" {
-                        let pos_split = py
-                            .replace('%', "")
-                            .split(',')
-                            .map(|s| s.to_owned())
-                            .collect::<Vec<String>>();
-                        spos.pos = pos_split
-                            .first()
-                            .unwrap_or(&"".to_string())
-                            .to_string()
-                            .parse::<i32>()
-                            .expect("number");
-                        if pos_split.len() > 1 {
-                            spos.pos_align =
-                                Some(pos_split.get(1).unwrap_or(&"".to_string()).to_string());
-                        }
-                    } else if px == "align" {
-                        spos.align = py;
-                    } else if px == "size" {
-                        spos.size = py.replace('%', "").parse::<i32>().expect("number");
-                    } else if px == "line" {
-                        let line_split = py
-                            .replace('%', "")
-                            .split(',')
-                            .map(|s| s.to_owned())
-                            .collect::<Vec<String>>();
-                        spos.line = line_split
-                            .first()
-                            .unwrap_or(&"".to_string())
-                            .to_string()
-                            .parse::<i32>()
-                            .expect("number");
-                        if line_split.len() > 1 {
-                            spos.line_align =
-                                Some(line_split.get(1).unwrap_or(&"".to_string()).to_string());
-                        }
-                    }
+            };
+            selector = Some(block[1..closing_idx].to_string());
+            block = &block[closing_idx + 1..]
+        }
+
+        // check for open curly brace
+        let Some(mut block) = block.trim_start().strip_prefix('{') else {
+            return Err(Error {
+                line: 1,
+                kind: VTTErrorKind::Parse("missing '{'".to_string()),
+            });
+        };
+
+        let mut line_num = 0;
+        // a newline might occur here
+        if block.starts_with('\n') {
+            line_num += 1;
+            block = &block[1..];
+        }
+
+        for line in block.split('\n') {
+            line_num += 1;
+
+            for item in line.split(';') {
+                if item.is_empty() {
+                    continue;
                 }
-                subline.position = Some(spos);
-                subline.line_text = subsplit
-                    .get((2 - idxshift)..)
-                    .expect("Couldn't find text")
-                    .join("\r\n")
-                    .replace("\r\n", "\\N");
-                if !line_found {
-                    sub.lines.clear();
-                    line_found = true;
-                }
-                sub.lines.push(subline)
+
+                let Some((name, value)) = item.split_once(':') else {
+                    return Err(Error {
+                        line: 1 + line_num,
+                        kind: VTTErrorKind::Parse("delimiter ':' missing".to_string()),
+                    });
+                };
+                entries.insert(name.trim().to_string(), value.trim().to_string());
             }
         }
+
+        Ok(VTTStyle { selector, entries })
     }
-    sub
+    pub(super) fn parse_cue_block<'a, I: Iterator<Item = &'a str>>(
+        mut block_lines: I,
+    ) -> Result<VTTLine> {
+        let mut identifier = None;
+        let mut settings = HashMap::new();
+
+        // extracts the first line, which is either an identifier or the start & end times (but the
+        // variable is called 'timing_line' for convenience)
+        let mut timing_line = block_lines.next().unwrap();
+        // check if the first line contains an identifier instead of the start & end times
+        if !timing_line.contains("-->") {
+            identifier = Some(timing_line.to_string());
+            timing_line = block_lines.next().ok_or(Error {
+                line: 2,
+                kind: VTTErrorKind::Parse("missing subtitle timing".to_string()),
+            })?;
+        }
+
+        // split the line at '-->'. the first item contains only a timestamp, the second item
+        // contains a timestamp + an optional list of settings for this cue block
+        let (start_str, mut end_str) = timing_line.split_once("-->").ok_or(Error {
+            line: 1 + identifier.is_some() as usize,
+            kind: VTTErrorKind::Parse("missing '-->'".to_string()),
+        })?;
+        // get the start time. because the parse functionality of the `time` crate isn't capable of
+        // parsing optional literals or templates that only contains minutes, seconds and subseconds
+        // the hour part must be prepended if not existent
+        let start = if start_str.chars().filter(|c| *c == ':').count() < 2 {
+            let start_str = format!("00:{}", start_str.trim());
+            Time::parse(&start_str, TIME_FORMAT).map_err(|e| Error {
+                line: 1 + identifier.is_some() as usize,
+                kind: VTTErrorKind::Parse(e.to_string()),
+            })?
+        } else {
+            Time::parse(start_str.trim(), TIME_FORMAT).map_err(|e| Error {
+                line: 1 + identifier.is_some() as usize,
+                kind: VTTErrorKind::Parse(e.to_string()),
+            })?
+        };
+        // if the end string contains a whitespace, it probably also will contain a settings list
+        // that is parsed in the if block
+        if end_str.trim().contains(' ') {
+            let settings_str;
+            (end_str, settings_str) = end_str.trim().split_once(' ').unwrap();
+
+            for setting in settings_str.split(' ') {
+                if let Some((id, value)) = setting.split_once(':') {
+                    settings.insert(id.to_string(), Some(value.to_string()));
+                } else {
+                    settings.insert(setting.to_string(), None);
+                }
+            }
+        }
+        // get the end time. because the parse functionality of the `time` crate isn't capable of
+        // parsing optional literals or templates that only contains minutes, seconds and subseconds
+        // the hour part must be prepended if not existent
+        let end = if end_str.chars().filter(|c| *c == ':').count() < 2 {
+            let end_str = format!("00:{}", end_str.trim());
+            Time::parse(&end_str, TIME_FORMAT).map_err(|e| Error {
+                line: 1 + identifier.is_some() as usize,
+                kind: VTTErrorKind::Parse(e.to_string()),
+            })?
+        } else {
+            Time::parse(end_str.trim(), TIME_FORMAT).map_err(|e| Error {
+                line: 1 + identifier.is_some() as usize,
+                kind: VTTErrorKind::Parse(e.to_string()),
+            })?
+        };
+
+        Ok(VTTLine {
+            identifier,
+            start,
+            end,
+            settings,
+            text: block_lines.collect::<Vec<&str>>().join("\n"),
+        })
+    }
+
+    fn parse_percentage(s: &str) -> Option<f32> {
+        if !s.ends_with('%') {
+            return None;
+        }
+        s[..s.len() - 1].parse().ok()
+    }
 }
 
-/// Parses the given [Path] into a [VTTFile].
-pub fn parse_from_file<P: AsRef<Path>>(file: P) -> Result<VTTFile, std::io::Error> {
-    Ok(parse(fs::read_to_string(file)?))
+error! {
+    VTTError => VTTErrorKind {
+        InvalidFormat,
+        Parse(String),
+    }
 }
