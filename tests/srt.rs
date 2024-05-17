@@ -26,7 +26,7 @@ fn convert_simple_to_ssa() {
     let expected = r"[Script Info]
 
 [V4+ Styles]
-Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColor,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding
+Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,Strikeout,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding
 Style: Default,Arial,20,&HFFFFFF,&H000000,&H00000000,&H00000000,0,0,0,0,120,120,0,0,1,1,1,2,0,0,20,0
 
 [Events]
@@ -84,7 +84,7 @@ fn convert_styling_to_ssa() {
     let expected = r"[Script Info]
 
 [V4+ Styles]
-Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColor,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding
+Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,Strikeout,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding
 Style: Default,Arial,20,&HFFFFFF,&H000000,&H00000000,&H00000000,0,0,0,0,120,120,0,0,1,1,1,2,0,0,20,0
 
 [Events]
@@ -126,7 +126,7 @@ fn convert_multiline_to_ssa() {
     let expected = r"[Script Info]
 
 [V4+ Styles]
-Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColor,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding
+Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,Strikeout,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding
 Style: Default,Arial,20,&HFFFFFF,&H000000,&H00000000,&H00000000,0,0,0,0,120,120,0,0,1,1,1,2,0,0,20,0
 
 [Events]
