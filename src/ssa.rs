@@ -395,7 +395,7 @@ impl Display for SSA {
 
         lines.push("".to_string());
         lines.push("[V4+ Styles]".to_string());
-        lines.push("Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColor,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding".to_string());
+        lines.push("Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,Strikeout,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding".to_string());
         for style in &self.styles {
             let line = [
                 style.name.to_string(),
@@ -509,7 +509,7 @@ mod parse {
                 }
                 "Script Updated By" => info.script_update_by = Some(value.to_string()),
                 "Update Details" => info.update_details = Some(value.to_string()),
-                "Script Type" => info.script_type = Some(value.to_string()),
+                "ScriptType" => info.script_type = Some(value.to_string()),
                 "Collisions" => info.collisions = Some(value.to_string()),
                 "PlayResY" => {
                     info.play_res_y = value.parse::<u32>().map(Some).map_err(|e| Error {
