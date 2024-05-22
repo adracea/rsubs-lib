@@ -32,7 +32,7 @@ pub struct SSAInfo {
     /// Whoever timed the original script
     pub original_timing: Option<String>,
     /// Description of where in the video the script should begin playback.
-    pub synch_point: Option<f32>,
+    pub synch_point: Option<String>,
     /// Names of any other subtitling groups who edited the original script.
     pub script_update_by: Option<String>,
     /// The details of any updates to the original script - made by other subtitling groups
@@ -379,7 +379,7 @@ impl Display for SSA {
         lines.extend(self.info.original_translation.as_ref().map(|l| format!("Original Translation: {l}")));
         lines.extend(self.info.original_editing.as_ref().map(|l| format!("Original Editing: {l}")));
         lines.extend(self.info.original_timing.as_ref().map(|l| format!("Original Timing: {l}")));
-        lines.extend(self.info.synch_point.map(|l| format!("Synch Point: {l}")));
+        lines.extend(self.info.synch_point.as_ref().map(|l| format!("Synch Point: {l}")));
         lines.extend(self.info.script_update_by.as_ref().map(|l| format!("Script Updated By: {l}")));
         lines.extend(self.info.update_details.as_ref().map(|l| format!("Update Details: {l}")));
         lines.extend(self.info.script_type.as_ref().map(|l| format!("Script Type: {l}")));
@@ -501,12 +501,7 @@ mod parse {
                 "Original Translation" => info.original_translation = Some(value.to_string()),
                 "Original Editing" => info.original_editing = Some(value.to_string()),
                 "Original Timing" => info.original_timing = Some(value.to_string()),
-                "Synch Point" => {
-                    info.synch_point = value.parse::<f32>().map(Some).map_err(|e| Error {
-                        line: 1 + i,
-                        kind: SSAErrorKind::Parse(e.to_string()),
-                    })?
-                }
+                "Synch Point" => info.synch_point = Some(value.to_string()),
                 "Script Updated By" => info.script_update_by = Some(value.to_string()),
                 "Update Details" => info.update_details = Some(value.to_string()),
                 "Script Type" => info.script_type = Some(value.to_string()),
