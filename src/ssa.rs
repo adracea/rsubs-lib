@@ -7,7 +7,7 @@ use regex::Regex;
 use std::collections::HashMap;
 use std::fmt::Display;
 
-use crate::util::{Alignment, BLACK, TRANSPARENT, WHITE};
+use crate::util::Alignment;
 use serde::{Deserialize, Serialize};
 
 use crate::error;
@@ -84,16 +84,16 @@ pub struct SSAStyle {
     /// Fontsize.
     pub fontsize: f32,
     /// The color that a subtitle will normally appear in.
-    pub primary_color: Color,
+    pub primary_color: Option<Color>,
     /// This color may be used instead of the Primary colour when a subtitle is automatically
     /// shifted to prevent an onscreen collision, to distinguish the different subtitles.
-    pub secondary_color: Color,
+    pub secondary_color: Option<Color>,
     /// This color may be used instead of the Primary or Secondary colour when a subtitle is
     /// automatically shifted to prevent an onscreen collision, to distinguish the different
     /// subtitles.
-    pub outline_color: Color,
+    pub outline_color: Option<Color>,
     /// The color of the subtitle outline or shadow.
-    pub back_color: Color,
+    pub back_color: Option<Color>,
     /// Defines whether text is bold or not.
     pub bold: bool,
     /// Defines whether text is italic or not.
@@ -145,10 +145,10 @@ impl Default for SSAStyle {
             name: "Default".to_string(),
             fontname: "Trebuchet MS".to_string(),
             fontsize: 25.5,
-            primary_color: WHITE,
-            secondary_color: BLACK,
-            outline_color: TRANSPARENT,
-            back_color: TRANSPARENT,
+            primary_color: None,
+            secondary_color: None,
+            outline_color: None,
+            back_color: None,
             bold: false,
             italic: false,
             underline: false,
@@ -401,10 +401,10 @@ impl Display for SSA {
                 style.name.to_string(),
                 style.fontname.to_string(),
                 style.fontsize.to_string(),
-                style.primary_color.to_ssa_string(),
-                style.secondary_color.to_ssa_string(),
-                style.outline_color.to_ssa_string(),
-                style.back_color.to_ssa_string(),
+                style.primary_color.map(|c| c.to_ssa_string()).unwrap_or_default(),
+                style.secondary_color.map(|c| c.to_ssa_string()).unwrap_or_default(),
+                style.outline_color.map(|c| c.to_ssa_string()).unwrap_or_default(),
+                style.back_color.map(|c| c.to_ssa_string()).unwrap_or_default(),
                 if style.bold { "-1" } else { "0" }.to_string(),
                 if style.italic { "-1" } else { "0" }.to_string(),
                 if style.underline { "-1" } else { "0" }.to_string(),

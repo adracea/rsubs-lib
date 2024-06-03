@@ -42,7 +42,7 @@ fn convert_simple_to_ssa() {
 
 [V4+ Styles]
 Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,Strikeout,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding
-Style: Default,Arial,20,&HFFFFFF,&H000000,&H00000000,&H00000000,0,0,0,0,120,120,0,0,1,1,1,2,0,0,20,0
+Style: Default,Arial,20,,,,,0,0,0,0,120,120,0,0,1,1,1,2,0,0,20,0
 
 [Events]
 Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
@@ -82,7 +82,7 @@ fn convert_styling_inline_to_ssa() {
 
 [V4+ Styles]
 Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,Strikeout,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding
-Style: Default,Arial,20,&HFFFFFF,&H000000,&H00000000,&H00000000,0,0,0,0,120,120,0,0,1,1,1,2,0,0,20,0
+Style: Default,Arial,20,,,,,0,0,0,0,120,120,0,0,1,1,1,2,0,0,20,0
 
 [Events]
 Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
@@ -141,7 +141,7 @@ fn convert_styling_global_to_ssa() {
 
 [V4+ Styles]
 Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,Strikeout,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding
-Style: Default,Arial,12,&HFF0000,&H000000,&H00000000,&H00000000,0,0,0,0,120,120,0,0,1,1,1,2,0,0,20,0
+Style: Default,Arial,12,&HFF0000,,,,0,0,0,0,120,120,0,0,1,1,1,2,0,0,20,0
 
 [Events]
 Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
@@ -178,7 +178,7 @@ fn convert_multiline_to_ssa() {
 
 [V4+ Styles]
 Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,Strikeout,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding
-Style: Default,Arial,20,&HFFFFFF,&H000000,&H00000000,&H00000000,0,0,0,0,120,120,0,0,1,1,1,2,0,0,20,0
+Style: Default,Arial,20,,,,,0,0,0,0,120,120,0,0,1,1,1,2,0,0,20,0
 
 [Events]
 Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
