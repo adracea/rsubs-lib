@@ -32,7 +32,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     for style in &mut ssa.styles {
         if style.name == "Default" {
-            style.primary_color = Color::new(255, 0, 0, 255)
+            style.primary_color = Some(Color::new(255, 0, 0, 255))
         }
     }
 

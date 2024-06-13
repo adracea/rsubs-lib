@@ -6,7 +6,7 @@
 use super::srt::{SRTLine, SRT};
 use super::ssa::{SSAEvent, SSAInfo, SSAStyle, SSA};
 use crate::error;
-use crate::util::{Alignment, Color, BLACK, TRANSPARENT, WHITE};
+use crate::util::{Alignment, Color};
 use regex::Regex;
 use serde::Deserialize;
 use serde::Serialize;
@@ -139,10 +139,10 @@ impl VTT {
             name: "Default".to_string(),
             fontname: "Arial".to_string(),
             fontsize: 20.0,
-            primary_color: WHITE,
-            secondary_color: BLACK,
-            outline_color: TRANSPARENT,
-            back_color: TRANSPARENT,
+            primary_color: None,
+            secondary_color: None,
+            outline_color: None,
+            back_color: None,
             alignment: Alignment::BottomCenter,
             ..Default::default()
         };
@@ -154,13 +154,13 @@ impl VTT {
             // text color. skips if the VTT color can't be read
             if let Some(color) = style.entries.get("color") {
                 if let Ok(primary_color) = Color::from_vtt(color) {
-                    default_style.primary_color = primary_color
+                    default_style.primary_color = Some(primary_color)
                 }
             }
             // background color. skips if the VTT color can't be read
             if let Some(background_color) = style.entries.get("background-color") {
                 if let Ok(back_color) = Color::from_vtt(background_color) {
-                    default_style.back_color = back_color
+                    default_style.back_color = Some(back_color)
                 }
             }
             // font size. can only be converted to SSA if it is given as pixels, in all other

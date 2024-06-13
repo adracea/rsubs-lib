@@ -18,7 +18,7 @@ pub struct Color {
     pub a: u8,
 }
 
-pub(crate) const WHITE: Color = Color {
+pub const WHITE: Color = Color {
     r: 255,
     g: 255,
     b: 255,
@@ -32,7 +32,7 @@ pub const BLACK: Color = Color {
     a: 255,
 };
 
-pub(crate) const TRANSPARENT: Color = Color {
+pub const TRANSPARENT: Color = Color {
     r: 0,
     g: 0,
     b: 0,
@@ -44,17 +44,20 @@ impl Color {
         Self { r, g, b, a }
     }
 
-    pub(crate) fn from_ssa(mut color: &str) -> Result<Self, String> {
+    pub(crate) fn from_ssa(mut color: &str) -> Result<Option<Self>, String> {
         if !color.starts_with("&H") || color.len() != 10 {
+            if color.is_empty() {
+                return Ok(None);
+            }
             return Err(format!("invalid color: #{color}"));
         }
         color = &color[2..];
-        Ok(Self {
+        Ok(Some(Self {
             r: u8::from_str_radix(&color[6..8], 16).map_err(|e| e.to_string())?,
             g: u8::from_str_radix(&color[4..6], 16).map_err(|e| e.to_string())?,
             b: u8::from_str_radix(&color[2..4], 16).map_err(|e| e.to_string())?,
             a: u8::from_str_radix(&color[0..2], 16).map_err(|e| e.to_string())?,
-        })
+        }))
     }
 
     pub(crate) fn from_vtt(color: &str) -> Result<Self, String> {
