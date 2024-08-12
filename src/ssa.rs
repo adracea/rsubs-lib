@@ -1042,13 +1042,13 @@ mod parse {
     fn map_parse_int_err(e: ParseIntError, line: usize) -> Error {
         Error {
             line,
-            kind: SSAErrorKind::Parse("map_parse_int_err".to_string()),
+            kind: SSAErrorKind::Parse(e.to_string()),
         }
     }
     fn map_parse_float_err(e: ParseFloatError, line: usize) -> Error {
         Error {
             line,
-            kind: SSAErrorKind::Parse("map_parse_float_err".to_string()),
+            kind: SSAErrorKind::Parse(e.to_string()),
         }
     }
 }
