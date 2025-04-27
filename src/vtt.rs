@@ -356,7 +356,7 @@ mod parse {
 
     pub(super) fn parse_start<'a, I: Iterator<Item = &'a str>>(mut block_lines: I) -> Result<()> {
         let line = block_lines.next().unwrap();
-        if !line.starts_with("WEBVTT") || block_lines.next().is_some() {
+        if !line.starts_with("WEBVTT") {
             return Err(Error {
                 line: 1,
                 kind: VTTErrorKind::InvalidFormat,
