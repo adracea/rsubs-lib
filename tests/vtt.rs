@@ -41,7 +41,7 @@ fn convert_simple_to_ssa() {
     let expected = r"[Script Info]
 
 [V4+ Styles]
-Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,Strikeout,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding
+Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding
 Style: Default,Arial,20,,,,,0,0,0,0,120,120,0,0,1,1,1,2,0,0,20,0
 
 [Events]
@@ -81,7 +81,7 @@ fn convert_styling_inline_to_ssa() {
     let expected = r"[Script Info]
 
 [V4+ Styles]
-Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,Strikeout,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding
+Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding
 Style: Default,Arial,20,,,,,0,0,0,0,120,120,0,0,1,1,1,2,0,0,20,0
 
 [Events]
@@ -140,7 +140,7 @@ fn convert_styling_global_to_ssa() {
     let expected = r"[Script Info]
 
 [V4+ Styles]
-Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,Strikeout,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding
+Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding
 Style: Default,Arial,12,&HFF0000,,,,0,0,0,0,120,120,0,0,1,1,1,2,0,0,20,0
 
 [Events]
@@ -177,7 +177,7 @@ fn convert_multiline_to_ssa() {
     let expected = r"[Script Info]
 
 [V4+ Styles]
-Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,Strikeout,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding
+Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding
 Style: Default,Arial,20,,,,,0,0,0,0,120,120,0,0,1,1,1,2,0,0,20,0
 
 [Events]
@@ -190,7 +190,7 @@ Dialogue: 0,0:00:00.00,0:00:02.00,Default,,0,0,0,,Lorem Ipsum 1\NLorem Ipsum 2\N
 #[test]
 fn serde() {
     let vtt = r#"WEBVTT
- 
+
 NOTE This is a note
 
 STYLE ::cue {}
@@ -226,7 +226,7 @@ fn invalid_start() {
 #[test]
 fn region_missing_delimiter() {
     let vtt = r#"WEBVTT
-    
+
 REGION
 id
 "#;

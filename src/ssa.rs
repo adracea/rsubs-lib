@@ -118,24 +118,24 @@ pub struct SSAStyle {
     /// If [SSAStyle::border_style] is `1`, then this specifies the width of the outline around the
     /// text (in pixels).
     /// Values may be `0`, `1`, `2`, `3` or `4`.
-    pub outline: i8,
+    pub outline: f32,
     /// If [SSAStyle::border_style] is `1`, then this specifies the depth of the drop shadow behind
     /// the text (in pixels). Values may be `0`, `1`, `2`, `3` or `4`. Drop shadow is always used in
     /// addition to an outline - SSA will force an outline of 1 pixel if no outline width is given.
-    pub shadow: i8,
+    pub shadow: f32,
     /// Sets how text is "justified" within the Left/Right onscreen margins, and also the vertical
     /// placing.
     pub alignment: Alignment,
     /// Defines the Left Margin in pixels.
-    pub margin_l: i32,
+    pub margin_l: f32,
     /// Defines the Right Margin in pixels.
-    pub margin_r: i32,
+    pub margin_r: f32,
     /// Defines the Vertical Left Margin in pixels.
-    pub margin_v: i32,
+    pub margin_v: f32,
     /// Specifies the font character set or encoding and on multilingual Windows installations it
     /// provides access to characters used in multiple than one language. It is usually 0 (zero)
     /// for English (Western, ANSI) Windows.
-    pub encoding: i32,
+    pub encoding: f32,
 }
 impl Eq for SSAStyle {}
 
@@ -158,13 +158,13 @@ impl Default for SSAStyle {
             spacing: 0.0,
             angle: 0.0,
             border_style: 1,
-            outline: 1,
-            shadow: 1,
+            outline: 1.0,
+            shadow: 1.0,
             alignment: Alignment::BottomCenter,
-            margin_l: 0,
-            margin_r: 0,
-            margin_v: 20,
-            encoding: 0,
+            margin_l: 0.0,
+            margin_r: 0.0,
+            margin_v: 20.0,
+            encoding: 0.0,
         }
     }
 }
@@ -395,7 +395,7 @@ impl Display for SSA {
 
         lines.push("".to_string());
         lines.push("[V4+ Styles]".to_string());
-        lines.push("Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,Strikeout,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding".to_string());
+        lines.push("Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding".to_string());
         for style in &self.styles {
             let line = [
                 style.name.to_string(),
@@ -688,7 +688,7 @@ mod parse {
                 strikeout: parse_str_to_bool(
                     get_line_value(
                         &headers,
-                        "Strikeout",
+                        "StrikeOut",
                         &line_list,
                         header_line,
                         header_line + 1 + i,
@@ -748,7 +748,8 @@ mod parse {
                     header_line + 1 + i,
                 )?
                 .parse()
-                .map_err(|e| map_parse_int_err(e, header_line + 1 + i))?,
+                .map(|op: f32| f32::from(op))
+                .map_err(|e| map_parse_float_err(e, header_line + 1 + i))?,
                 shadow: get_line_value(
                     &headers,
                     "Shadow",
@@ -757,7 +758,8 @@ mod parse {
                     header_line + 1 + i,
                 )?
                 .parse()
-                .map_err(|e| map_parse_int_err(e, header_line + 1 + i))?,
+                .map(|op: f32| f32::from(op))
+                .map_err(|e| map_parse_float_err(e, header_line + 1 + i))?,
                 alignment: Alignment::infer_from_str(get_line_value(
                     &headers,
                     "Alignment",
@@ -774,7 +776,8 @@ mod parse {
                     header_line + 1 + i,
                 )?
                 .parse()
-                .map_err(|e| map_parse_int_err(e, header_line + 1 + i))?,
+                .map(|op: f32| f32::from(op))
+                .map_err(|e| map_parse_float_err(e, header_line + 1 + i))?,
                 margin_r: get_line_value(
                     &headers,
                     "MarginR",
@@ -783,7 +786,8 @@ mod parse {
                     header_line + 1 + i,
                 )?
                 .parse()
-                .map_err(|e| map_parse_int_err(e, header_line + 1 + i))?,
+                .map(|op: f32| f32::from(op))
+                .map_err(|e| map_parse_float_err(e, header_line + 1 + i))?,
                 margin_v: get_line_value(
                     &headers,
                     "MarginV",
@@ -792,7 +796,8 @@ mod parse {
                     header_line + 1 + i,
                 )?
                 .parse()
-                .map_err(|e| map_parse_int_err(e, header_line + 1 + i))?,
+                .map(|op: f32| f32::from(op))
+                .map_err(|e| map_parse_float_err(e, header_line + 1 + i))?,
                 encoding: get_line_value(
                     &headers,
                     "Encoding",
@@ -801,7 +806,8 @@ mod parse {
                     header_line + 1 + i,
                 )?
                 .parse()
-                .map_err(|e| map_parse_int_err(e, header_line + 1 + i))?,
+                .map(|op: f32| f32::from(op))
+                .map_err(|e| map_parse_float_err(e, header_line + 1 + i))?,
             })
         }
 
@@ -1001,10 +1007,18 @@ mod parse {
         header_line: usize,
         current_line: usize,
     ) -> Result<&'a &'a str> {
-        let pos = headers.iter().position(|h| *h == name).ok_or(Error {
-            line: header_line,
-            kind: SSAErrorKind::MissingHeader(name.to_string()),
-        })?;
+        let pos = headers
+            .iter()
+            .position(|h| {
+                let value: &str = h.trim();
+
+                value.to_lowercase() == name.to_lowercase()
+            })
+            .ok_or(Error {
+                line: header_line,
+                kind: SSAErrorKind::MissingHeader(name.to_string()),
+            })?;
+
         list.get(pos).ok_or(Error {
             line: current_line,
             kind: SSAErrorKind::Parse(format!("no value for header '{}'", name)),
