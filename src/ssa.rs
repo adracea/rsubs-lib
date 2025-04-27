@@ -246,10 +246,7 @@ impl SSA {
         let mut line_num = 0;
 
         let mut blocks = vec![vec![]];
-
-        let contents: String = content.as_ref().to_string().replace("\u{feff}", "");
-
-        for line in contents.lines() {
+        for line in content.as_ref().lines() {
             if line.trim().is_empty() {
                 blocks.push(vec![])
             } else {
