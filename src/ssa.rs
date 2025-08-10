@@ -231,6 +231,15 @@ impl Default for SSAEvent {
         }
     }
 }
+
+/// Parser options for SSA/ASS.
+/// - `lenient_style_bools`: if true, accept `1` as `true` in Styles
+///   (Bold/Italic/Underline/StrikeOut) in addition to spec `-1/0`.
+#[derive(Clone, Copy, Default)]
+pub struct SSAParseOptions {
+    pub lenient_style_bools: bool,
+}
+
 /// Contains the styles, events and info as well as a format mentioning whether it's `.ass` or `.ssa`
 #[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
 pub struct SSA {
@@ -242,8 +251,24 @@ pub struct SSA {
 }
 
 impl SSA {
-    /// Parses the given [String] into [SSA].
     pub fn parse<S: AsRef<str>>(content: S) -> Result<SSA, SSAError> {
+        Self::parse_with_options(content, SSAParseOptions::default())
+    }
+
+    pub fn parse_lenient<S: AsRef<str>>(s: S) -> Result<SSA, SSAError> {
+        Self::parse_with_options(
+            s,
+            SSAParseOptions {
+                lenient_style_bools: true,
+            },
+        )
+    }
+
+    /// Parses the given [String] into [SSA].
+    pub fn parse_with_options<S: AsRef<str>>(
+        content: S,
+        opts: SSAParseOptions,
+    ) -> Result<SSA, SSAError> {
         let mut blocks = Vec::new();
         for (i, line) in (1..).zip(strip_bom(&content).lines()) {
             match line.trim() {
@@ -272,7 +297,7 @@ impl SSA {
             let (i, line) = iter.next().unwrap(); // safe unwrap: each block is guaranteed non-empty
             match line {
                 "[Script Info]" => ssa.info = parse::parse_script_info_block(iter)?,
-                "[V4+ Styles]" => ssa.styles = parse::parse_style_block(i, iter)?,
+                "[V4+ Styles]" => ssa.styles = parse::parse_style_block(i, iter, opts)?,
                 "[Events]" => ssa.events = parse::parse_events_block(i, iter)?,
                 "[Fonts]" => ssa.fonts = parse::parse_fonts_block(iter)?,
                 "[Graphics]" => ssa.graphics = parse::parse_graphics_block(iter)?,
@@ -548,6 +573,7 @@ mod parse {
     pub(super) fn parse_style_block<'a, I: Iterator<Item = (usize, &'a str)>>(
         header_line: usize,
         mut block_lines: I,
+        opts: SSAParseOptions,
     ) -> Result<Vec<SSAStyle>> {
         let (header_line, headers) = parse_block_header(header_line, &mut block_lines)?;
 
@@ -616,18 +642,22 @@ mod parse {
                 bold: parse_str_to_bool(
                     get_line_value(&headers, "Bold", &line_list, header_line, i)?,
                     i,
+                    opts,
                 )?,
                 italic: parse_str_to_bool(
                     get_line_value(&headers, "Italic", &line_list, header_line, i)?,
                     i,
+                    opts,
                 )?,
                 underline: parse_str_to_bool(
                     get_line_value(&headers, "Underline", &line_list, header_line, i)?,
                     i,
+                    opts,
                 )?,
                 strikeout: parse_str_to_bool(
                     get_line_value(&headers, "StrikeOut", &line_list, header_line, i)?,
                     i,
+                    opts,
                 )?,
                 scale_x: get_line_value(&headers, "ScaleX", &line_list, header_line, i)?
                     .parse()
@@ -806,10 +836,11 @@ mod parse {
             kind: SSAErrorKind::Parse(format!("no value for header '{}'", name)),
         })
     }
-    fn parse_str_to_bool(s: &str, line: usize) -> Result<bool> {
+    fn parse_str_to_bool(s: &str, line: usize, opts: SSAParseOptions) -> Result<bool> {
         match s {
             "0" => Ok(false),
             "-1" => Ok(true),
+            "1" if opts.lenient_style_bools => Ok(true),
             _ => Err(Error {
                 line,
                 kind: SSAErrorKind::Parse(
