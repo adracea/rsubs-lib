@@ -444,3 +444,12 @@ fn cue_invalid_end_time_hour() {
     assert_eq!(err.line(), 3);
     assert!(matches!(err.kind(), &VTTErrorKind::Parse(_)))
 }
+
+#[test]
+fn parse_empty_file_as_vtt_no_panic() {
+    // We expect this to error out, that's fine, but panicking is bad.
+    let vtt = "";
+
+    let result = VTT::parse(vtt);
+    assert!(result.is_err());
+}
