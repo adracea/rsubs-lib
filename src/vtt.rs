@@ -85,7 +85,9 @@ impl VTT {
             blocks.remove(blocks.len() - 1);
         }
 
-        parse::parse_start(blocks.remove(0).into_iter())
+        let mut blocks = blocks.into_iter();
+
+        parse::parse_start(blocks.next().unwrap_or_default().into_iter())
             .map_err(|e| VTTError::new(e.kind, line_num + e.line))?;
 
         line_num += 1;
