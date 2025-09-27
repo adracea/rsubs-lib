@@ -871,3 +871,10 @@ fn parse_complex_ass() {
 
     assert_eq!(ssa.events.len(), 448);
 }
+
+#[test]
+fn parse_bom_content() {
+    let bom = format!("\u{FEFF}{}", SIMPLE);
+    let bom = SSA::parse(bom).unwrap();
+    assert_eq!(bom, SSA::parse(SIMPLE).unwrap());
+}

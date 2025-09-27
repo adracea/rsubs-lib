@@ -15,6 +15,7 @@ use crate::error;
 use time::Time;
 
 use super::ssa::SSA;
+use super::strip_bom;
 use super::vtt::{VTTLine, VTT};
 
 const TIME_FORMAT: &[BorrowedFormatItem] =
@@ -54,7 +55,7 @@ impl SRT {
         let mut line_num = 0;
 
         let mut blocks = vec![vec![]];
-        for line in content.as_ref().lines() {
+        for line in strip_bom(&content).lines() {
             if line.trim().is_empty() {
                 if !blocks.last().unwrap().is_empty() {
                     blocks.push(vec![])

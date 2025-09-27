@@ -17,6 +17,7 @@ use crate::vtt::VTT;
 use time::Time;
 
 use super::srt::{SRTLine, SRT};
+use super::strip_bom;
 
 /// [SSAInfo] contains headers and general information about the script.
 #[derive(Clone, Debug, Default, PartialEq, Deserialize, Serialize)]
@@ -246,7 +247,7 @@ impl SSA {
         let mut line_num = 0;
 
         let mut blocks = vec![vec![]];
-        for line in content.as_ref().lines() {
+        for line in strip_bom(&content).lines() {
             if line.trim().is_empty() {
                 blocks.push(vec![])
             } else {
