@@ -230,6 +230,15 @@ impl Default for SSAEvent {
         }
     }
 }
+
+/// Parser options for SSA/ASS.
+/// - `lenient_style_bools`: if true, accept `1` as `true` in Styles
+///   (Bold/Italic/Underline/StrikeOut) in addition to spec `-1/0`.
+#[derive(Clone, Copy, Default)]
+pub struct SSAParseOptions {
+    pub lenient_style_bools: bool,
+}
+
 /// Contains the styles, events and info as well as a format mentioning whether it's `.ass` or `.ssa`
 #[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
 pub struct SSA {
@@ -241,8 +250,17 @@ pub struct SSA {
 }
 
 impl SSA {
-    /// Parses the given [String] into [SSA].
+
     pub fn parse<S: AsRef<str>>(content: S) -> Result<SSA, SSAError> {
+        Self::parse_with_options(content, SSAParseOptions::default())
+    }
+
+    pub fn parse_lenient<S: AsRef<str>>(s: S) -> Result<SSA, SSAError> {
+        Self::parse_with_options(s, SSAParseOptions { lenient_style_bools: true })
+    }
+
+    /// Parses the given [String] into [SSA].
+    pub fn parse_with_options<S: AsRef<str>>(content: S, opts: SSAParseOptions) -> Result<SSA, SSAError> {
         let mut line_num = 0;
 
         let mut blocks = vec![vec![]];
@@ -279,7 +297,7 @@ impl SSA {
 
             match block.remove(0) {
                 "[V4+ Styles]" => {
-                    ssa.styles = parse::parse_style_block(block.into_iter())
+                    ssa.styles = parse::parse_style_block(block.into_iter(), opts)
                         .map_err(|e| SSAError::new(e.kind, line_num + e.line))?
                 }
                 "[Events]" => {
@@ -548,6 +566,7 @@ mod parse {
 
     pub(super) fn parse_style_block<'a, I: Iterator<Item = &'a str>>(
         mut block_lines: I,
+        opts: SSAParseOptions
     ) -> Result<Vec<SSAStyle>> {
         let mut header_line = 1;
         let header = loop {
@@ -664,6 +683,7 @@ mod parse {
                         header_line + 1 + i,
                     )?,
                     header_line + 1 + i,
+                    opts,
                 )?,
                 italic: parse_str_to_bool(
                     get_line_value(
@@ -674,6 +694,7 @@ mod parse {
                         header_line + 1 + i,
                     )?,
                     header_line + 1 + i,
+                    opts,
                 )?,
                 underline: parse_str_to_bool(
                     get_line_value(
@@ -684,6 +705,7 @@ mod parse {
                         header_line + 1 + i,
                     )?,
                     header_line + 1 + i,
+                    opts,
                 )?,
                 strikeout: parse_str_to_bool(
                     get_line_value(
@@ -694,6 +716,7 @@ mod parse {
                         header_line + 1 + i,
                     )?,
                     header_line + 1 + i,
+                    opts,
                 )?,
                 scale_x: get_line_value(
                     &headers,
@@ -1024,10 +1047,12 @@ mod parse {
             kind: SSAErrorKind::Parse(format!("no value for header '{}'", name)),
         })
     }
-    fn parse_str_to_bool(s: &str, line: usize) -> Result<bool> {
+    fn parse_str_to_bool(s: &str, line: usize, opts: SSAParseOptions) -> Result<bool> {
         match s {
+            
             "0" => Ok(false),
             "-1" => Ok(true),
+            "1"  if opts.lenient_style_bools => Ok(true),
             _ => Err(Error {
                 line,
                 kind: SSAErrorKind::Parse(
