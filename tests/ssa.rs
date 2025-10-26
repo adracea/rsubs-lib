@@ -761,15 +761,10 @@ Style: De4,Trebuchet MS,25.5,&H00FFFFFF,&H00000000,&H00000000,&H00000000,-1,0,0,
 #[test]
 fn empty_block() {
     let ssa = r#"[Script Info]
-
-
-[V4+ Styles]
-Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding
-Style: Default,Arial,25.5,&H00FFFFFF,&H00000000,&H00000000,&H00000000,-1,0,0,0,120,120,0,0,1,1,1,2,0000,0000,0030,0
-"#;
+[V4+ Styles]"#;
 
     let err = SSA::parse(ssa).unwrap_err();
-    assert_eq!(err.line(), 3);
+    assert_eq!(err.line(), 2);
     assert!(matches!(err.kind(), SSAErrorKind::EmptyBlock))
 }
 
@@ -877,4 +872,18 @@ fn parse_bom_content() {
     let bom = format!("\u{FEFF}{}", SIMPLE);
     let bom = SSA::parse(bom).unwrap();
     assert_eq!(bom, SSA::parse(SIMPLE).unwrap());
+}
+
+#[test]
+fn parse_simple_with_empty_lines() {
+    let xs: Vec<_> = SIMPLE.lines().collect();
+    let s = format!(
+        "{}\n{}\n{}",
+        xs[0],
+        xs[2..5].join("\n\n"),
+        xs[5..].join("\n\n\n")
+    );
+
+    let ssa = SSA::parse(s).unwrap();
+    assert_eq!(ssa, SSA::parse(SIMPLE).unwrap());
 }
