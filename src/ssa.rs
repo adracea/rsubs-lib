@@ -267,14 +267,15 @@ impl SSA {
 
         let mut ssa = SSA::default();
 
-        for mut block in blocks {
-            let (i, line) = block.remove(0);
+        for block in blocks {
+            let mut iter = block.into_iter();
+            let (i, line) = iter.next().unwrap(); // safe unwrap: each block is guaranteed non-empty
             match line {
-                "[Script Info]" => ssa.info = parse::parse_script_info_block(block.into_iter())?,
-                "[V4+ Styles]" => ssa.styles = parse::parse_style_block(i, block.into_iter())?,
-                "[Events]" => ssa.events = parse::parse_events_block(i, block.into_iter())?,
-                "[Fonts]" => ssa.fonts = parse::parse_fonts_block(block.into_iter())?,
-                "[Graphics]" => ssa.graphics = parse::parse_graphics_block(block.into_iter())?,
+                "[Script Info]" => ssa.info = parse::parse_script_info_block(iter)?,
+                "[V4+ Styles]" => ssa.styles = parse::parse_style_block(i, iter)?,
+                "[Events]" => ssa.events = parse::parse_events_block(i, iter)?,
+                "[Fonts]" => ssa.fonts = parse::parse_fonts_block(iter)?,
+                "[Graphics]" => ssa.graphics = parse::parse_graphics_block(iter)?,
                 _ => continue,
             }
         }
