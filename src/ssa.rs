@@ -247,7 +247,7 @@ impl SSA {
         let mut blocks = Vec::new();
         for (i, line) in (1..).zip(strip_bom(&content).lines()) {
             match line.trim() {
-                l if l.is_empty() => continue,
+                l if l.is_empty() || l.starts_with(&[';', '#']) => continue,
                 l if l.starts_with('[') => blocks.push(vec![(i, line)]),
                 _ => {
                     if let Some(b) = blocks.last_mut() {
@@ -464,10 +464,6 @@ mod parse {
         let mut info = SSAInfo::default();
 
         for (i, line) in block_lines {
-            if line.starts_with(';') {
-                continue;
-            }
-
             let Some((name, mut value)) = line.split_once(':') else {
                 return Err(Error {
                     line: i,
@@ -532,24 +528,20 @@ mod parse {
     }
 
     fn parse_block_header<'a, I: Iterator<Item = (usize, &'a str)>>(
-        mut header_line: usize,
+        header_line: usize,
         mut block_lines: I,
     ) -> Result<(usize, Vec<&'a str>)> {
-        loop {
-            let (i, line) = block_lines.next().ok_or_else(|| Error {
-                line: header_line,
-                kind: SSAErrorKind::EmptyBlock,
-            })?;
-            header_line = i;
+        let (i, line) = block_lines.next().ok_or_else(|| Error {
+            line: header_line,
+            kind: SSAErrorKind::EmptyBlock,
+        })?;
 
-            if !line.starts_with(';') {
-                let header = line.strip_prefix("Format:").ok_or_else(|| Error {
-                    line: i,
-                    kind: SSAErrorKind::Parse("header must start with 'Format:'".to_string()),
-                })?;
-                return Ok((i, header.trim().split(',').collect()));
-            }
-        }
+        let header = line.strip_prefix("Format:").ok_or_else(|| Error {
+            line: i,
+            kind: SSAErrorKind::Parse("header must start with 'Format:'".to_string()),
+        })?;
+
+        Ok((i, header.trim().split(',').collect()))
     }
 
     pub(super) fn parse_style_block<'a, I: Iterator<Item = (usize, &'a str)>>(
@@ -561,10 +553,6 @@ mod parse {
         let mut styles = vec![];
 
         for (i, line) in block_lines {
-            if line.starts_with(';') {
-                continue;
-            }
-
             let Some(line) = line.strip_prefix("Style:") else {
                 return Err(Error {
                     line: i,
@@ -702,10 +690,6 @@ mod parse {
         let mut events = vec![];
 
         for (i, line) in block_lines {
-            if line.starts_with(';') {
-                continue;
-            }
-
             let Some((line_type, line)) = line.split_once(':') else {
                 return Err(Error {
                     line: i,

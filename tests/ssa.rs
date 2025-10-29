@@ -887,3 +887,9 @@ fn parse_simple_with_empty_lines() {
     let ssa = SSA::parse(s).unwrap();
     assert_eq!(ssa, SSA::parse(SIMPLE).unwrap());
 }
+
+#[test]
+fn skip_hash_comment_lines() {
+    let s: String = SIMPLE.lines().map(|l| format!("{}\n#\n", l)).collect();
+    assert_eq!(SSA::parse(s).unwrap(), SSA::parse(SIMPLE).unwrap());
+}
