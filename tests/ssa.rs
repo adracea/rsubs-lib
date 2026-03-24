@@ -833,6 +833,18 @@ Style: Default,Arial,25.5,&H00FFFFFF,&H00000000,{color},&H00000000,-1,0,0,0,120,
 }
 
 #[test]
+fn styles_whitespace() {
+    let ssa = r#"[Script Info]
+
+[V4+ Styles]
+Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding
+Style: Default, Arial,   25.5,&H00FFFFFF,&H00000000, &H00000000 ,&H00000000,-1 ,0,   0      ,0,120,120,0,0,1,1,1,2,0000,0000,0030,0
+"#;
+
+    let _ = SSA::parse(ssa).unwrap();
+}
+
+#[test]
 fn events_missing_header() {
     let ssa = r#"[Script Info]
 
