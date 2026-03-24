@@ -1006,7 +1006,7 @@ mod parse {
         list: &'a Vec<&str>,
         header_line: usize,
         current_line: usize,
-    ) -> Result<&'a &'a str> {
+    ) -> Result<&'a str> {
         let pos = headers
             .iter()
             .position(|h| {
@@ -1019,7 +1019,7 @@ mod parse {
                 kind: SSAErrorKind::MissingHeader(name.to_string()),
             })?;
 
-        list.get(pos).ok_or(Error {
+        list.get(pos).map(|l| l.trim()).ok_or(Error {
             line: current_line,
             kind: SSAErrorKind::Parse(format!("no value for header '{}'", name)),
         })
