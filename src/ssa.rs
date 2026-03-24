@@ -17,6 +17,7 @@ use crate::vtt::VTT;
 use time::Time;
 
 use super::srt::{SRTLine, SRT};
+use super::strip_bom;
 
 /// [SSAInfo] contains headers and general information about the script.
 #[derive(Clone, Debug, Default, PartialEq, Deserialize, Serialize)]
@@ -243,61 +244,40 @@ pub struct SSA {
 impl SSA {
     /// Parses the given [String] into [SSA].
     pub fn parse<S: AsRef<str>>(content: S) -> Result<SSA, SSAError> {
-        let mut line_num = 0;
-
-        let mut blocks = vec![vec![]];
-        for line in content.as_ref().lines() {
-            if line.trim().is_empty() {
-                blocks.push(vec![])
-            } else {
-                blocks.last_mut().unwrap().push(line)
+        let mut blocks = Vec::new();
+        for (i, line) in (1..).zip(strip_bom(&content).lines()) {
+            match line.trim() {
+                l if l.is_empty() || l.starts_with(&[';', '#']) => continue,
+                l if l.starts_with('[') => blocks.push(vec![(i, line)]),
+                _ => {
+                    if let Some(b) = blocks.last_mut() {
+                        b.push((i, line))
+                    }
+                }
             }
+        }
+
+        if !blocks
+            .first()
+            .map(|b| &b[0])
+            .is_some_and(|l| l.1 == "[Script Info]")
+        {
+            return Err(SSAError::new(SSAErrorKind::Invalid, 1));
         }
 
         let mut ssa = SSA::default();
 
-        if blocks[0].first().is_some_and(|l| *l == "[Script Info]") {
-            line_num += 1;
-            let mut block = blocks.remove(0);
-            let block_len = block.len();
-            block.remove(0);
-            ssa.info = parse::parse_script_info_block(block.into_iter())
-                .map_err(|e| SSAError::new(e.kind, line_num + e.line))?;
-            line_num += block_len
-        } else {
-            return Err(SSAError::new(SSAErrorKind::Invalid, 1));
-        }
-
-        for mut block in blocks {
-            line_num += 1;
-
-            if block.is_empty() {
-                return Err(SSAError::new(SSAErrorKind::EmptyBlock, line_num));
-            }
-
-            let block_len = block.len();
-
-            match block.remove(0) {
-                "[V4+ Styles]" => {
-                    ssa.styles = parse::parse_style_block(block.into_iter())
-                        .map_err(|e| SSAError::new(e.kind, line_num + e.line))?
-                }
-                "[Events]" => {
-                    ssa.events = parse::parse_events_block(block.into_iter())
-                        .map_err(|e| SSAError::new(e.kind, line_num + e.line))?
-                }
-                "[Fonts]" => {
-                    ssa.fonts = parse::parse_fonts_block(block.into_iter())
-                        .map_err(|e| SSAError::new(e.kind, line_num + e.line))?
-                }
-                "[Graphics]" => {
-                    ssa.graphics = parse::parse_graphics_block(block.into_iter())
-                        .map_err(|e| SSAError::new(e.kind, line_num + e.line))?
-                }
+        for block in blocks {
+            let mut iter = block.into_iter();
+            let (i, line) = iter.next().unwrap(); // safe unwrap: each block is guaranteed non-empty
+            match line {
+                "[Script Info]" => ssa.info = parse::parse_script_info_block(iter)?,
+                "[V4+ Styles]" => ssa.styles = parse::parse_style_block(i, iter)?,
+                "[Events]" => ssa.events = parse::parse_events_block(i, iter)?,
+                "[Fonts]" => ssa.fonts = parse::parse_fonts_block(iter)?,
+                "[Graphics]" => ssa.graphics = parse::parse_graphics_block(iter)?,
                 _ => continue,
             }
-
-            line_num += block_len
         }
 
         Ok(ssa)
@@ -468,24 +448,26 @@ mod parse {
         pub(super) kind: SSAErrorKind,
     }
 
+    impl From<Error> for SSAError {
+        fn from(e: Error) -> SSAError {
+            SSAError::new(e.kind, e.line)
+        }
+    }
+
     pub(super) const TIME_FORMAT: &[BorrowedFormatItem] =
         format_description!("[hour padding:none]:[minute]:[second].[subsecond digits:2]");
 
     type Result<T> = std::result::Result<T, Error>;
 
-    pub(super) fn parse_script_info_block<'a, I: Iterator<Item = &'a str>>(
+    pub(super) fn parse_script_info_block<'a, I: Iterator<Item = (usize, &'a str)>>(
         block_lines: I,
     ) -> Result<SSAInfo> {
         let mut info = SSAInfo::default();
 
-        for (i, line) in block_lines.enumerate() {
-            if line.starts_with(';') {
-                continue;
-            }
-
+        for (i, line) in block_lines {
             let Some((name, mut value)) = line.split_once(':') else {
                 return Err(Error {
-                    line: 1 + i,
+                    line: i,
                     kind: SSAErrorKind::Parse("delimiter ':' missing".to_string()),
                 });
             };
@@ -508,31 +490,31 @@ mod parse {
                 "Collisions" => info.collisions = Some(value.to_string()),
                 "PlayResY" => {
                     info.play_res_y = value.parse::<u32>().map(Some).map_err(|e| Error {
-                        line: 1 + i,
+                        line: i,
                         kind: SSAErrorKind::Parse(e.to_string()),
                     })?
                 }
                 "PlayResX" => {
                     info.play_res_x = value.parse::<u32>().map(Some).map_err(|e| Error {
-                        line: 1 + i,
+                        line: i,
                         kind: SSAErrorKind::Parse(e.to_string()),
                     })?
                 }
                 "PlayDepth" => {
                     info.play_depth = value.parse::<u32>().map(Some).map_err(|e| Error {
-                        line: 1 + i,
+                        line: i,
                         kind: SSAErrorKind::Parse(e.to_string()),
                     })?
                 }
                 "Timer" => {
                     info.timer = value.parse::<f32>().map(Some).map_err(|e| Error {
-                        line: 1 + i,
+                        line: i,
                         kind: SSAErrorKind::Parse(e.to_string()),
                     })?
                 }
                 "WrapStyle" => {
                     info.wrap_style = value.parse::<u8>().map(Some).map_err(|e| Error {
-                        line: 1 + i,
+                        line: i,
                         kind: SSAErrorKind::Parse(e.to_string()),
                     })?
                 }
@@ -546,80 +528,56 @@ mod parse {
         Ok(info)
     }
 
-    pub(super) fn parse_style_block<'a, I: Iterator<Item = &'a str>>(
+    fn parse_block_header<'a, I: Iterator<Item = (usize, &'a str)>>(
+        header_line: usize,
+        mut block_lines: I,
+    ) -> Result<(usize, Vec<&'a str>)> {
+        let (i, line) = block_lines.next().ok_or_else(|| Error {
+            line: header_line,
+            kind: SSAErrorKind::EmptyBlock,
+        })?;
+
+        let header = line.strip_prefix("Format:").ok_or_else(|| Error {
+            line: i,
+            kind: SSAErrorKind::Parse("header must start with 'Format:'".to_string()),
+        })?;
+
+        Ok((i, header.trim().split(',').collect()))
+    }
+
+    pub(super) fn parse_style_block<'a, I: Iterator<Item = (usize, &'a str)>>(
+        header_line: usize,
         mut block_lines: I,
     ) -> Result<Vec<SSAStyle>> {
-        let mut header_line = 1;
-        let header = loop {
-            let Some(line) = block_lines.next() else {
-                return Err(Error {
-                    line: 1,
-                    kind: SSAErrorKind::EmptyBlock,
-                });
-            };
-            if !line.starts_with(';') {
-                break line.to_string();
-            }
-            header_line += 1;
-        };
-        let Some(header) = header.strip_prefix("Format:") else {
-            return Err(Error {
-                line: header_line,
-                kind: SSAErrorKind::Parse("styles header must start with 'Format:'".to_string()),
-            });
-        };
-        let headers = header.trim().split(',').collect();
+        let (header_line, headers) = parse_block_header(header_line, &mut block_lines)?;
 
         let mut styles = vec![];
 
-        for (i, line) in block_lines.enumerate() {
-            if line.starts_with(';') {
-                continue;
-            }
-
+        for (i, line) in block_lines {
             let Some(line) = line.strip_prefix("Style:") else {
                 return Err(Error {
-                    line: header_line + 1 + i,
+                    line: i,
                     kind: SSAErrorKind::Parse("styles line must start with 'Style:'".to_string()),
                 });
             };
             let line_list: Vec<&str> = line.trim().split(',').collect();
 
             styles.push(SSAStyle {
-                name: get_line_value(
-                    &headers,
-                    "Name",
-                    &line_list,
-                    header_line,
-                    header_line + 1 + i,
-                )?
-                .to_string(),
-                fontname: get_line_value(
-                    &headers,
-                    "Fontname",
-                    &line_list,
-                    header_line,
-                    header_line + 1 + i,
-                )?
-                .to_string(),
-                fontsize: get_line_value(
-                    &headers,
-                    "Fontsize",
-                    &line_list,
-                    header_line,
-                    header_line + 1 + i,
-                )?
-                .parse()
-                .map_err(|e| map_parse_float_err(e, header_line + 1 + i))?,
+                name: get_line_value(&headers, "Name", &line_list, header_line, i)?.to_string(),
+                fontname: get_line_value(&headers, "Fontname", &line_list, header_line, i)?
+                    .to_string(),
+                fontsize: get_line_value(&headers, "Fontsize", &line_list, header_line, i)?
+                    .parse()
+                    .map_err(|e| map_parse_float_err(e, i))?,
                 primary_color: Color::from_ssa(get_line_value(
                     &headers,
                     "PrimaryColour",
                     &line_list,
                     header_line,
-                    header_line + 1 + i,
+                    i,
                 )?)
                 .map_err(|e| Error {
-                    line: 2 + i,
+                    line: i,
                     kind: SSAErrorKind::Parse(e.to_string()),
                 })?,
                 secondary_color: Color::from_ssa(get_line_value(
@@ -627,10 +585,10 @@ mod parse {
                     "SecondaryColour",
                     &line_list,
                     header_line,
-                    header_line + 1 + i,
+                    i,
                 )?)
                 .map_err(|e| Error {
-                    line: 2 + i,
+                    line: i,
                     kind: SSAErrorKind::Parse(e.to_string()),
                 })?,
                 outline_color: Color::from_ssa(get_line_value(
@@ -638,10 +596,10 @@ mod parse {
                     "OutlineColour",
                     &line_list,
                     header_line,
-                    header_line + 1 + i,
+                    i,
                 )?)
                 .map_err(|e| Error {
-                    line: 2 + i,
+                    line: i,
                     kind: SSAErrorKind::Parse(e.to_string()),
                 })?,
                 back_color: Color::from_ssa(get_line_value(
@@ -649,307 +607,131 @@ mod parse {
                     "BackColour",
                     &line_list,
                     header_line,
-                    header_line + 1 + i,
+                    i,
                 )?)
                 .map_err(|e| Error {
-                    line: header_line + 1 + i,
+                    line: i,
                     kind: SSAErrorKind::Parse(e.to_string()),
                 })?,
                 bold: parse_str_to_bool(
-                    get_line_value(
-                        &headers,
-                        "Bold",
-                        &line_list,
-                        header_line,
-                        header_line + 1 + i,
-                    )?,
-                    header_line + 1 + i,
+                    get_line_value(&headers, "Bold", &line_list, header_line, i)?,
+                    i,
                 )?,
                 italic: parse_str_to_bool(
-                    get_line_value(
-                        &headers,
-                        "Italic",
-                        &line_list,
-                        header_line,
-                        header_line + 1 + i,
-                    )?,
-                    header_line + 1 + i,
+                    get_line_value(&headers, "Italic", &line_list, header_line, i)?,
+                    i,
                 )?,
                 underline: parse_str_to_bool(
-                    get_line_value(
-                        &headers,
-                        "Underline",
-                        &line_list,
-                        header_line,
-                        header_line + 1 + i,
-                    )?,
-                    header_line + 1 + i,
+                    get_line_value(&headers, "Underline", &line_list, header_line, i)?,
+                    i,
                 )?,
                 strikeout: parse_str_to_bool(
-                    get_line_value(
-                        &headers,
-                        "StrikeOut",
-                        &line_list,
-                        header_line,
-                        header_line + 1 + i,
-                    )?,
-                    header_line + 1 + i,
+                    get_line_value(&headers, "StrikeOut", &line_list, header_line, i)?,
+                    i,
                 )?,
-                scale_x: get_line_value(
-                    &headers,
-                    "ScaleX",
-                    &line_list,
-                    header_line,
-                    header_line + 1 + i,
-                )?
-                .parse()
-                .map_err(|e| map_parse_float_err(e, header_line + 1 + i))?,
-                scale_y: get_line_value(
-                    &headers,
-                    "ScaleY",
-                    &line_list,
-                    header_line,
-                    header_line + 1 + i,
-                )?
-                .parse()
-                .map_err(|e| map_parse_float_err(e, header_line + 1 + i))?,
-                spacing: get_line_value(
-                    &headers,
-                    "Spacing",
-                    &line_list,
-                    header_line,
-                    header_line + 1 + i,
-                )?
-                .parse()
-                .map_err(|e| map_parse_float_err(e, header_line + 1 + i))?,
-                angle: get_line_value(
-                    &headers,
-                    "Angle",
-                    &line_list,
-                    header_line,
-                    header_line + 1 + i,
-                )?
-                .parse()
-                .map_err(|e| map_parse_float_err(e, header_line + 1 + i))?,
-                border_style: get_line_value(
-                    &headers,
-                    "BorderStyle",
-                    &line_list,
-                    header_line,
-                    header_line + 1 + i,
-                )?
-                .parse()
-                .map_err(|e| map_parse_int_err(e, header_line + 1 + i))?,
-                outline: get_line_value(
-                    &headers,
-                    "Outline",
-                    &line_list,
-                    header_line,
-                    header_line + 1 + i,
-                )?
-                .parse()
-                .map(|op: f32| f32::from(op))
-                .map_err(|e| map_parse_float_err(e, header_line + 1 + i))?,
-                shadow: get_line_value(
-                    &headers,
-                    "Shadow",
-                    &line_list,
-                    header_line,
-                    header_line + 1 + i,
-                )?
-                .parse()
-                .map(|op: f32| f32::from(op))
-                .map_err(|e| map_parse_float_err(e, header_line + 1 + i))?,
+                scale_x: get_line_value(&headers, "ScaleX", &line_list, header_line, i)?
+                    .parse()
+                    .map_err(|e| map_parse_float_err(e, i))?,
+                scale_y: get_line_value(&headers, "ScaleY", &line_list, header_line, i)?
+                    .parse()
+                    .map_err(|e| map_parse_float_err(e, i))?,
+                spacing: get_line_value(&headers, "Spacing", &line_list, header_line, i)?
+                    .parse()
+                    .map_err(|e| map_parse_float_err(e, i))?,
+                angle: get_line_value(&headers, "Angle", &line_list, header_line, i)?
+                    .parse()
+                    .map_err(|e| map_parse_float_err(e, i))?,
+                border_style: get_line_value(&headers, "BorderStyle", &line_list, header_line, i)?
+                    .parse()
+                    .map_err(|e| map_parse_int_err(e, i))?,
+                outline: get_line_value(&headers, "Outline", &line_list, header_line, i)?
+                    .parse()
+                    .map(|op: f32| f32::from(op))
+                    .map_err(|e| map_parse_float_err(e, i))?,
+                shadow: get_line_value(&headers, "Shadow", &line_list, header_line, i)?
+                    .parse()
+                    .map(|op: f32| f32::from(op))
+                    .map_err(|e| map_parse_float_err(e, i))?,
                 alignment: Alignment::infer_from_str(get_line_value(
                     &headers,
                     "Alignment",
                     &line_list,
                     header_line,
-                    header_line + 1 + i,
+                    i,
                 )?)
                 .unwrap(),
-                margin_l: get_line_value(
-                    &headers,
-                    "MarginL",
-                    &line_list,
-                    header_line,
-                    header_line + 1 + i,
-                )?
-                .parse()
-                .map(|op: f32| f32::from(op))
-                .map_err(|e| map_parse_float_err(e, header_line + 1 + i))?,
-                margin_r: get_line_value(
-                    &headers,
-                    "MarginR",
-                    &line_list,
-                    header_line,
-                    header_line + 1 + i,
-                )?
-                .parse()
-                .map(|op: f32| f32::from(op))
-                .map_err(|e| map_parse_float_err(e, header_line + 1 + i))?,
-                margin_v: get_line_value(
-                    &headers,
-                    "MarginV",
-                    &line_list,
-                    header_line,
-                    header_line + 1 + i,
-                )?
-                .parse()
-                .map(|op: f32| f32::from(op))
-                .map_err(|e| map_parse_float_err(e, header_line + 1 + i))?,
-                encoding: get_line_value(
-                    &headers,
-                    "Encoding",
-                    &line_list,
-                    header_line,
-                    header_line + 1 + i,
-                )?
-                .parse()
-                .map(|op: f32| f32::from(op))
-                .map_err(|e| map_parse_float_err(e, header_line + 1 + i))?,
+                margin_l: get_line_value(&headers, "MarginL", &line_list, header_line, i)?
+                    .parse()
+                    .map(|op: f32| f32::from(op))
+                    .map_err(|e| map_parse_float_err(e, i))?,
+                margin_r: get_line_value(&headers, "MarginR", &line_list, header_line, i)?
+                    .parse()
+                    .map(|op: f32| f32::from(op))
+                    .map_err(|e| map_parse_float_err(e, i))?,
+                margin_v: get_line_value(&headers, "MarginV", &line_list, header_line, i)?
+                    .parse()
+                    .map(|op: f32| f32::from(op))
+                    .map_err(|e| map_parse_float_err(e, i))?,
+                encoding: get_line_value(&headers, "Encoding", &line_list, header_line, i)?
+                    .parse()
+                    .map(|op: f32| f32::from(op))
+                    .map_err(|e| map_parse_float_err(e, i))?,
             })
         }
 
         Ok(styles)
     }
 
-    pub(super) fn parse_events_block<'a, I: Iterator<Item = &'a str>>(
+    pub(super) fn parse_events_block<'a, I: Iterator<Item = (usize, &'a str)>>(
+        header_line: usize,
         mut block_lines: I,
     ) -> Result<Vec<SSAEvent>> {
-        let mut header_line = 1;
-        let header = loop {
-            let Some(line) = block_lines.next() else {
-                return Err(Error {
-                    line: 1,
-                    kind: SSAErrorKind::EmptyBlock,
-                });
-            };
-            if !line.starts_with(';') {
-                break line.to_string();
-            }
-            header_line += 1;
-        };
-        let Some(header) = header.strip_prefix("Format:") else {
-            return Err(Error {
-                line: header_line,
-                kind: SSAErrorKind::Parse("events header must start with 'Format:'".to_string()),
-            });
-        };
-        let headers = header.trim().split(',').collect();
+        let (header_line, headers) = parse_block_header(header_line, &mut block_lines)?;
 
         let mut events = vec![];
 
-        for (i, line) in block_lines.enumerate() {
-            if line.starts_with(';') {
-                continue;
-            }
-
+        for (i, line) in block_lines {
             let Some((line_type, line)) = line.split_once(':') else {
                 return Err(Error {
-                    line: 2 + i,
+                    line: i,
                     kind: SSAErrorKind::Parse("delimiter ':' missing".to_string()),
                 });
             };
             let line_list: Vec<&str> = line.trim().splitn(10, ',').collect();
 
             events.push(SSAEvent {
-                layer: get_line_value(
-                    &headers,
-                    "Layer",
-                    &line_list,
-                    header_line,
-                    header_line + 1 + i,
-                )?
-                .parse()
-                .map_err(|e| map_parse_int_err(e, header_line + 1 + i))?,
+                layer: get_line_value(&headers, "Layer", &line_list, header_line, i)?
+                    .parse()
+                    .map_err(|e| map_parse_int_err(e, i))?,
                 start: Time::parse(
-                    get_line_value(
-                        &headers,
-                        "Start",
-                        &line_list,
-                        header_line,
-                        header_line + 1 + i,
-                    )?,
+                    get_line_value(&headers, "Start", &line_list, header_line, i)?,
                     TIME_FORMAT,
                 )
                 .map_err(|e| Error {
-                    line: header_line + 1 + i,
+                    line: i,
                     kind: SSAErrorKind::Parse(e.to_string()),
                 })?,
                 end: Time::parse(
-                    get_line_value(
-                        &headers,
-                        "End",
-                        &line_list,
-                        header_line,
-                        header_line + 1 + i,
-                    )?,
+                    get_line_value(&headers, "End", &line_list, header_line, i)?,
                     TIME_FORMAT,
                 )
                 .map_err(|e| Error {
-                    line: header_line + 1 + i,
+                    line: i,
                     kind: SSAErrorKind::Parse(e.to_string()),
                 })?,
-                style: get_line_value(
-                    &headers,
-                    "Style",
-                    &line_list,
-                    header_line,
-                    header_line + 1 + i,
-                )?
-                .to_string(),
-                name: get_line_value(
-                    &headers,
-                    "Name",
-                    &line_list,
-                    header_line,
-                    header_line + 1 + i,
-                )?
-                .to_string(),
-                margin_l: get_line_value(
-                    &headers,
-                    "MarginL",
-                    &line_list,
-                    header_line,
-                    header_line + 1 + i,
-                )?
-                .parse()
-                .map_err(|e| map_parse_float_err(e, header_line + 1 + i))?,
-                margin_r: get_line_value(
-                    &headers,
-                    "MarginR",
-                    &line_list,
-                    header_line,
-                    header_line + 1 + i,
-                )?
-                .parse()
-                .map_err(|e| map_parse_float_err(e, header_line + 1 + i))?,
-                margin_v: get_line_value(
-                    &headers,
-                    "MarginV",
-                    &line_list,
-                    header_line,
-                    header_line + 1 + i,
-                )?
-                .parse()
-                .map_err(|e| map_parse_float_err(e, header_line + 1 + i))?,
-                effect: get_line_value(
-                    &headers,
-                    "Effect",
-                    &line_list,
-                    header_line,
-                    header_line + 1 + i,
-                )?
-                .to_string(),
-                text: get_line_value(
-                    &headers,
-                    "Text",
-                    &line_list,
-                    header_line,
-                    header_line + 1 + i,
-                )?
-                .to_string(),
+                style: get_line_value(&headers, "Style", &line_list, header_line, i)?.to_string(),
+                name: get_line_value(&headers, "Name", &line_list, header_line, i)?.to_string(),
+                margin_l: get_line_value(&headers, "MarginL", &line_list, header_line, i)?
+                    .parse()
+                    .map_err(|e| map_parse_float_err(e, i))?,
+                margin_r: get_line_value(&headers, "MarginR", &line_list, header_line, i)?
+                    .parse()
+                    .map_err(|e| map_parse_float_err(e, i))?,
+                margin_v: get_line_value(&headers, "MarginV", &line_list, header_line, i)?
+                    .parse()
+                    .map_err(|e| map_parse_float_err(e, i))?,
+                effect: get_line_value(&headers, "Effect", &line_list, header_line, i)?.to_string(),
+                text: get_line_value(&headers, "Text", &line_list, header_line, i)?.to_string(),
                 line_type: match line_type {
                     "Dialogue" => SSAEventLineType::Dialogue,
                     "Comment" => SSAEventLineType::Comment,
@@ -961,15 +743,15 @@ mod parse {
         Ok(events)
     }
 
-    pub(super) fn parse_fonts_block<'a, I: Iterator<Item = &'a str>>(
+    pub(super) fn parse_fonts_block<'a, I: Iterator<Item = (usize, &'a str)>>(
         block_lines: I,
     ) -> Result<Vec<String>> {
         let mut fonts = vec![];
 
-        for (i, line) in block_lines.enumerate() {
+        for (i, line) in block_lines {
             let Some(line) = line.strip_prefix("fontname:") else {
                 return Err(Error {
-                    line: 1 + i,
+                    line: i,
                     kind: SSAErrorKind::Parse("fonts line must start with 'fontname:'".to_string()),
                 });
             };
@@ -979,15 +761,15 @@ mod parse {
         Ok(fonts)
     }
 
-    pub(super) fn parse_graphics_block<'a, I: Iterator<Item = &'a str>>(
+    pub(super) fn parse_graphics_block<'a, I: Iterator<Item = (usize, &'a str)>>(
         block_lines: I,
     ) -> Result<Vec<String>> {
         let mut graphics = vec![];
 
-        for (i, line) in block_lines.enumerate() {
+        for (i, line) in block_lines {
             let Some(line) = line.strip_prefix("filename:") else {
                 return Err(Error {
-                    line: 1 + i,
+                    line: i,
                     kind: SSAErrorKind::Parse(
                         "graphics line must start with 'filename:'".to_string(),
                     ),

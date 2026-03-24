@@ -5,6 +5,7 @@
 
 use super::srt::{SRTLine, SRT};
 use super::ssa::{SSAEvent, SSAInfo, SSAStyle, SSA};
+use super::strip_bom;
 use crate::error;
 use crate::util::{Alignment, Color};
 use regex::Regex;
@@ -72,7 +73,7 @@ impl VTT {
         let mut lines = vec![];
 
         let mut blocks = vec![vec![]];
-        for line in content.as_ref().lines() {
+        for line in strip_bom(&content).lines() {
             if line.trim().is_empty() {
                 if !blocks.last().unwrap().is_empty() {
                     blocks.push(vec![])
