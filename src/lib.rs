@@ -73,3 +73,8 @@ macro_rules! error {
     };
 }
 pub(crate) use error;
+
+fn strip_bom<S: AsRef<str>>(content: &S) -> &str {
+    let content = content.as_ref();
+    content.strip_prefix('\u{FEFF}').unwrap_or(content)
+}

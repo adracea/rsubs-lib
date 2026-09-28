@@ -444,3 +444,10 @@ fn cue_invalid_end_time_hour() {
     assert_eq!(err.line(), 3);
     assert!(matches!(err.kind(), &VTTErrorKind::Parse(_)))
 }
+
+#[test]
+fn parse_bom_content() {
+    let bom = format!("\u{FEFF}{}", SIMPLE);
+    let bom = VTT::parse(bom).unwrap();
+    assert_eq!(bom, VTT::parse(SIMPLE).unwrap());
+}

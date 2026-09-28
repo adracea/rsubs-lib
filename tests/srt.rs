@@ -217,3 +217,10 @@ We are in New York City
     assert_eq!(err.line(), 2);
     assert!(matches!(err.kind(), SRTErrorKind::Parse(_)))
 }
+
+#[test]
+fn parse_bom_content() {
+    let bom = format!("\u{FEFF}{}", SIMPLE);
+    let bom = SRT::parse(bom).unwrap();
+    assert_eq!(bom, SRT::parse(SIMPLE).unwrap());
+}
