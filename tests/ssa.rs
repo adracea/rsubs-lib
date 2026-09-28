@@ -947,3 +947,37 @@ fn skip_hash_comment_lines() {
     let s: String = SIMPLE.lines().map(|l| format!("{}\n#\n", l)).collect();
     assert_eq!(SSA::parse(s).unwrap(), SSA::parse(SIMPLE).unwrap());
 }
+
+#[test]
+fn sections_split_at_headers_only() {
+    let script_info = "[Script Info]\nTitle: t\n";
+    let events = "[Events]\nFormat: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\nDialogue: 0,0:00:00.20,0:00:02.20,Default,,0000,0000,0000,,Lorem Ipsum1\n";
+    let expected = SSA::parse(format!("{script_info}\n{events}")).unwrap();
+    assert_eq!(expected.events.len(), 1);
+
+    for s in [
+        format!("{script_info}\n{events}\n"),
+        format!("{script_info}\n\n{events}"),
+        format!("{script_info}{events}"),
+        format!(
+            "{script_info}\n{}",
+            events.replace("[Events]", "  [Events] ")
+        ),
+    ] {
+        assert_eq!(SSA::parse(s).unwrap(), expected);
+    }
+}
+
+#[test]
+fn sections_without_blank_lines_error_line() {
+    let ssa = r#"[Script Info]
+Title: t
+[Events]
+Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
+Dialogue: 0,0:00:00.20,0:00:02.20,Default,,0000,0000,,Lorem Ipsum1
+"#;
+
+    let err = SSA::parse(ssa).unwrap_err();
+    assert_eq!(err.line(), 5);
+    assert!(matches!(err.kind(), SSAErrorKind::Parse(_)))
+}

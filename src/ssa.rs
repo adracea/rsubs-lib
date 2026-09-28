@@ -289,7 +289,7 @@ impl SSA {
         if !blocks
             .first()
             .map(|b| &b[0])
-            .is_some_and(|l| l.1 == "[Script Info]")
+            .is_some_and(|l| l.1.trim() == "[Script Info]")
         {
             return Err(SSAError::new(SSAErrorKind::Invalid, 1));
         }
@@ -299,7 +299,7 @@ impl SSA {
         for block in blocks {
             let mut iter = block.into_iter();
             let (i, line) = iter.next().unwrap(); // safe unwrap: each block is guaranteed non-empty
-            match line {
+            match line.trim() {
                 "[Script Info]" => ssa.info = parse::parse_script_info_block(iter)?,
                 "[V4+ Styles]" => ssa.styles = parse::parse_style_block(i, iter, opts)?,
                 "[Events]" => ssa.events = parse::parse_events_block(i, iter)?,
