@@ -235,9 +235,12 @@ impl Default for SSAEvent {
 /// Parser options for SSA/ASS.
 /// - `lenient_style_bools`: if true, accept `1` as `true` in Styles
 ///   (Bold/Italic/Underline/StrikeOut) in addition to spec `-1/0`.
+/// - `lenient_times`: if true, accept one to three digits after the seconds of event times,
+///   read as centiseconds like libass does (`0:00:01.100` is `0:00:02.00`).
 #[derive(Clone, Copy, Default)]
 pub struct SSAParseOptions {
     pub lenient_style_bools: bool,
+    pub lenient_times: bool,
 }
 
 /// Contains the styles, events and info as well as a format mentioning whether it's `.ass` or `.ssa`
@@ -260,6 +263,7 @@ impl SSA {
             s,
             SSAParseOptions {
                 lenient_style_bools: true,
+                lenient_times: true,
             },
         )
     }
@@ -302,7 +306,7 @@ impl SSA {
             match line.trim() {
                 "[Script Info]" => ssa.info = parse::parse_script_info_block(iter)?,
                 "[V4+ Styles]" => ssa.styles = parse::parse_style_block(i, iter, opts)?,
-                "[Events]" => ssa.events = parse::parse_events_block(i, iter)?,
+                "[Events]" => ssa.events = parse::parse_events_block(i, iter, opts)?,
                 "[Fonts]" => ssa.fonts = parse::parse_fonts_block(iter)?,
                 "[Graphics]" => ssa.graphics = parse::parse_graphics_block(iter)?,
                 _ => continue,
@@ -485,6 +489,8 @@ mod parse {
 
     pub(super) const TIME_FORMAT: &[BorrowedFormatItem] =
         format_description!("[hour padding:none]:[minute]:[second].[subsecond digits:2]");
+    const TIME_FORMAT_NO_FRACTION: &[BorrowedFormatItem] =
+        format_description!("[hour padding:none]:[minute]:[second]");
 
     type Result<T> = std::result::Result<T, Error>;
 
@@ -719,6 +725,7 @@ mod parse {
     pub(super) fn parse_events_block<'a, I: Iterator<Item = (usize, &'a str)>>(
         header_line: usize,
         mut block_lines: I,
+        opts: SSAParseOptions,
     ) -> Result<Vec<SSAEvent>> {
         let (header_line, headers) = parse_block_header(header_line, &mut block_lines)?;
 
@@ -737,22 +744,16 @@ mod parse {
                 layer: get_line_value(&headers, "Layer", &line_list, header_line, i)?
                     .parse()
                     .map_err(|e| map_parse_int_err(e, i))?,
-                start: Time::parse(
+                start: parse_time(
                     get_line_value(&headers, "Start", &line_list, header_line, i)?,
-                    TIME_FORMAT,
-                )
-                .map_err(|e| Error {
-                    line: i,
-                    kind: SSAErrorKind::Parse(e.to_string()),
-                })?,
-                end: Time::parse(
+                    i,
+                    opts,
+                )?,
+                end: parse_time(
                     get_line_value(&headers, "End", &line_list, header_line, i)?,
-                    TIME_FORMAT,
-                )
-                .map_err(|e| Error {
-                    line: i,
-                    kind: SSAErrorKind::Parse(e.to_string()),
-                })?,
+                    i,
+                    opts,
+                )?,
                 style: get_line_value(&headers, "Style", &line_list, header_line, i)?.to_string(),
                 name: get_line_value(&headers, "Name", &line_list, header_line, i)?.to_string(),
                 margin_l: get_line_value(&headers, "MarginL", &line_list, header_line, i)?
@@ -856,6 +857,35 @@ mod parse {
                 ),
             }),
         }
+    }
+    fn parse_time(s: &str, line: usize, opts: SSAParseOptions) -> Result<Time> {
+        let map_err = |e: &dyn Display| Error {
+            line,
+            kind: SSAErrorKind::Parse(e.to_string()),
+        };
+
+        if !opts.lenient_times {
+            return Time::parse(s, TIME_FORMAT).map_err(|e| map_err(&e));
+        }
+
+        let Some((hms, cs)) = s.split_once('.').filter(|(_, cs)| {
+            (1..=3).contains(&cs.len()) && cs.bytes().all(|b| b.is_ascii_digit())
+        }) else {
+            return Err(map_err(&"time fraction must have one to three digits"));
+        };
+        let hms = Time::parse(hms, TIME_FORMAT_NO_FRACTION).map_err(|e| map_err(&e))?;
+        // libass reads the fraction as a whole number of centiseconds, so `.100` carries into
+        // the seconds and `.5` is 50 ms
+        let cs: u32 = cs.parse().unwrap(); // safe unwrap: at most three ascii digits
+        let (h, m, sec) = hms.as_hms();
+        let ms = ((h as u32 * 60 + m as u32) * 60 + sec as u32) * 1000 + cs * 10;
+        Time::from_hms_milli(
+            (ms / 3_600_000) as u8,
+            (ms / 60_000 % 60) as u8,
+            (ms / 1000 % 60) as u8,
+            (ms % 1000) as u16,
+        )
+        .map_err(|e| map_err(&e))
     }
     fn map_parse_int_err(e: ParseIntError, line: usize) -> Error {
         Error {

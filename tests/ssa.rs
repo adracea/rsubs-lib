@@ -1,4 +1,5 @@
 use rsubs_lib::{SSAErrorKind, SSA};
+use time::Time;
 
 const SIMPLE: &str = r"[Script Info]
 
@@ -910,6 +911,50 @@ Dialogue: 0,0:00:00.20,0:00:02.20,Default,,0000,0000,,{\i1}Lorem Ipsum1{\i0}
 "#;
 
     let err = SSA::parse(ssa).unwrap_err();
+    assert_eq!(err.line(), 5);
+    assert!(matches!(err.kind(), SSAErrorKind::Parse(_)))
+}
+
+#[test]
+fn lenient_three_digit_time_fraction() {
+    let ssa = r#"[Script Info]
+
+[Events]
+Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
+Dialogue: 0,0:10:42.100,0:59:59.100,Default,,0000,0000,0000,,Lorem Ipsum1
+Dialogue: 0,0:00:00.5,0:00:01.50,Default,,0000,0000,0000,,Lorem Ipsum2
+"#;
+
+    let err = SSA::parse(ssa).unwrap_err();
+    assert_eq!(err.line(), 5);
+    assert!(matches!(err.kind(), SSAErrorKind::Parse(_)));
+
+    let parsed = SSA::parse_lenient(ssa).unwrap();
+    assert_eq!(parsed.events[0].start, Time::from_hms(0, 10, 43).unwrap());
+    assert_eq!(parsed.events[0].end, Time::from_hms(1, 0, 0).unwrap());
+    assert_eq!(
+        parsed.events[1].start,
+        Time::from_hms_milli(0, 0, 0, 50).unwrap()
+    );
+    assert_eq!(
+        parsed.events[1].end,
+        Time::from_hms_milli(0, 0, 1, 500).unwrap()
+    );
+    assert!(parsed
+        .to_string()
+        .contains("Dialogue: 0,0:10:43.00,1:00:00.00,"));
+}
+
+#[test]
+fn lenient_time_past_end_of_day() {
+    let ssa = r#"[Script Info]
+
+[Events]
+Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
+Dialogue: 0,23:59:59.100,23:59:59.100,Default,,0000,0000,0000,,Lorem Ipsum1
+"#;
+
+    let err = SSA::parse_lenient(ssa).unwrap_err();
     assert_eq!(err.line(), 5);
     assert!(matches!(err.kind(), SSAErrorKind::Parse(_)))
 }
