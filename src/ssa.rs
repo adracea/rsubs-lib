@@ -273,7 +273,11 @@ impl SSA {
         for (i, line) in (1..).zip(strip_bom(&content).lines()) {
             match line.trim() {
                 l if l.is_empty() || l.starts_with(&[';', '#']) => continue,
-                l if l.starts_with('[') => blocks.push(vec![(i, line)]),
+                // embedded font/graphic data (uuencoded, `!` to `` ` ``) may start with '[' but
+                // never contains lowercase letters, while every section name does
+                l if l.starts_with('[') && l.ends_with(']') && l.contains(char::is_lowercase) => {
+                    blocks.push(vec![(i, line)])
+                }
                 _ => {
                     if let Some(b) = blocks.last_mut() {
                         b.push((i, line))
@@ -779,13 +783,15 @@ mod parse {
         let mut fonts = vec![];
 
         for (i, line) in block_lines {
-            let Some(line) = line.strip_prefix("fontname:") else {
+            if let Some(name) = line.strip_prefix("fontname:") {
+                fonts.push(name.trim().to_string())
+            } else if fonts.is_empty() {
                 return Err(Error {
                     line: i,
                     kind: SSAErrorKind::Parse("fonts line must start with 'fontname:'".to_string()),
                 });
-            };
-            fonts.push(line.trim().to_string())
+            }
+            // other lines are the uuencoded data of the last font
         }
 
         Ok(fonts)
@@ -797,15 +803,17 @@ mod parse {
         let mut graphics = vec![];
 
         for (i, line) in block_lines {
-            let Some(line) = line.strip_prefix("filename:") else {
+            if let Some(name) = line.strip_prefix("filename:") {
+                graphics.push(name.trim().to_string())
+            } else if graphics.is_empty() {
                 return Err(Error {
                     line: i,
                     kind: SSAErrorKind::Parse(
                         "graphics line must start with 'filename:'".to_string(),
                     ),
                 });
-            };
-            graphics.push(line.trim().to_string())
+            }
+            // other lines are the uuencoded data of the last graphic
         }
 
         Ok(graphics)

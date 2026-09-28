@@ -845,6 +845,48 @@ Style: Default, Arial,   25.5,&H00FFFFFF,&H00000000, &H00000000 ,&H00000000,-1 ,
 }
 
 #[test]
+fn embedded_fonts_and_graphics() {
+    let ssa = r#"[Script Info]
+Title: t
+
+[Fonts]
+fontname: x_0.ttf
+M0T%H:7,@:7,@;F]T(&$@<F5A;"!F;VYT(&9I;&4N
+[B-=1$]Y&B!J#AEK%"1U
+fontname: y_0.ttf
+[5!@]
+
+[Graphics]
+filename: a.png
+[B-=1$]Y&B!J#AEK%"1U
+filename: b.png
+M0T%H:7,@:7,@;F]T
+
+[Events]
+Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
+Dialogue: 0,0:00:00.20,0:00:02.20,Default,,0000,0000,0000,,Lorem Ipsum1
+"#;
+
+    let ssa = SSA::parse(ssa).unwrap();
+    assert_eq!(ssa.fonts, vec!["x_0.ttf", "y_0.ttf"]);
+    assert_eq!(ssa.graphics, vec!["a.png", "b.png"]);
+    assert_eq!(ssa.events.len(), 1);
+}
+
+#[test]
+fn fonts_data_before_name() {
+    let ssa = r#"[Script Info]
+
+[Fonts]
+M0T%H:7,@:7,@;F]T
+"#;
+
+    let err = SSA::parse(ssa).unwrap_err();
+    assert_eq!(err.line(), 4);
+    assert!(matches!(err.kind(), SSAErrorKind::Parse(_)))
+}
+
+#[test]
 fn events_missing_header() {
     let ssa = r#"[Script Info]
 
