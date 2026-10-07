@@ -1,4 +1,5 @@
 use rsubs_lib::{SSAErrorKind, SSA};
+use time::Time;
 
 const SIMPLE: &str = r"[Script Info]
 
@@ -845,6 +846,48 @@ Style: Default, Arial,   25.5,&H00FFFFFF,&H00000000, &H00000000 ,&H00000000,-1 ,
 }
 
 #[test]
+fn embedded_fonts_and_graphics() {
+    let ssa = r#"[Script Info]
+Title: t
+
+[Fonts]
+fontname: x_0.ttf
+M0T%H:7,@:7,@;F]T(&$@<F5A;"!F;VYT(&9I;&4N
+[B-=1$]Y&B!J#AEK%"1U
+fontname: y_0.ttf
+[5!@]
+
+[Graphics]
+filename: a.png
+[B-=1$]Y&B!J#AEK%"1U
+filename: b.png
+M0T%H:7,@:7,@;F]T
+
+[Events]
+Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
+Dialogue: 0,0:00:00.20,0:00:02.20,Default,,0000,0000,0000,,Lorem Ipsum1
+"#;
+
+    let ssa = SSA::parse(ssa).unwrap();
+    assert_eq!(ssa.fonts, vec!["x_0.ttf", "y_0.ttf"]);
+    assert_eq!(ssa.graphics, vec!["a.png", "b.png"]);
+    assert_eq!(ssa.events.len(), 1);
+}
+
+#[test]
+fn fonts_data_before_name() {
+    let ssa = r#"[Script Info]
+
+[Fonts]
+M0T%H:7,@:7,@;F]T
+"#;
+
+    let err = SSA::parse(ssa).unwrap_err();
+    assert_eq!(err.line(), 4);
+    assert!(matches!(err.kind(), SSAErrorKind::Parse(_)))
+}
+
+#[test]
 fn events_missing_header() {
     let ssa = r#"[Script Info]
 
@@ -868,6 +911,50 @@ Dialogue: 0,0:00:00.20,0:00:02.20,Default,,0000,0000,,{\i1}Lorem Ipsum1{\i0}
 "#;
 
     let err = SSA::parse(ssa).unwrap_err();
+    assert_eq!(err.line(), 5);
+    assert!(matches!(err.kind(), SSAErrorKind::Parse(_)))
+}
+
+#[test]
+fn lenient_three_digit_time_fraction() {
+    let ssa = r#"[Script Info]
+
+[Events]
+Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
+Dialogue: 0,0:10:42.100,0:59:59.100,Default,,0000,0000,0000,,Lorem Ipsum1
+Dialogue: 0,0:00:00.5,0:00:01.50,Default,,0000,0000,0000,,Lorem Ipsum2
+"#;
+
+    let err = SSA::parse(ssa).unwrap_err();
+    assert_eq!(err.line(), 5);
+    assert!(matches!(err.kind(), SSAErrorKind::Parse(_)));
+
+    let parsed = SSA::parse_lenient(ssa).unwrap();
+    assert_eq!(parsed.events[0].start, Time::from_hms(0, 10, 43).unwrap());
+    assert_eq!(parsed.events[0].end, Time::from_hms(1, 0, 0).unwrap());
+    assert_eq!(
+        parsed.events[1].start,
+        Time::from_hms_milli(0, 0, 0, 50).unwrap()
+    );
+    assert_eq!(
+        parsed.events[1].end,
+        Time::from_hms_milli(0, 0, 1, 500).unwrap()
+    );
+    assert!(parsed
+        .to_string()
+        .contains("Dialogue: 0,0:10:43.00,1:00:00.00,"));
+}
+
+#[test]
+fn lenient_time_past_end_of_day() {
+    let ssa = r#"[Script Info]
+
+[Events]
+Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
+Dialogue: 0,23:59:59.100,23:59:59.100,Default,,0000,0000,0000,,Lorem Ipsum1
+"#;
+
+    let err = SSA::parse_lenient(ssa).unwrap_err();
     assert_eq!(err.line(), 5);
     assert!(matches!(err.kind(), SSAErrorKind::Parse(_)))
 }
@@ -904,4 +991,38 @@ fn parse_simple_with_empty_lines() {
 fn skip_hash_comment_lines() {
     let s: String = SIMPLE.lines().map(|l| format!("{}\n#\n", l)).collect();
     assert_eq!(SSA::parse(s).unwrap(), SSA::parse(SIMPLE).unwrap());
+}
+
+#[test]
+fn sections_split_at_headers_only() {
+    let script_info = "[Script Info]\nTitle: t\n";
+    let events = "[Events]\nFormat: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\nDialogue: 0,0:00:00.20,0:00:02.20,Default,,0000,0000,0000,,Lorem Ipsum1\n";
+    let expected = SSA::parse(format!("{script_info}\n{events}")).unwrap();
+    assert_eq!(expected.events.len(), 1);
+
+    for s in [
+        format!("{script_info}\n{events}\n"),
+        format!("{script_info}\n\n{events}"),
+        format!("{script_info}{events}"),
+        format!(
+            "{script_info}\n{}",
+            events.replace("[Events]", "  [Events] ")
+        ),
+    ] {
+        assert_eq!(SSA::parse(s).unwrap(), expected);
+    }
+}
+
+#[test]
+fn sections_without_blank_lines_error_line() {
+    let ssa = r#"[Script Info]
+Title: t
+[Events]
+Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
+Dialogue: 0,0:00:00.20,0:00:02.20,Default,,0000,0000,,Lorem Ipsum1
+"#;
+
+    let err = SSA::parse(ssa).unwrap_err();
+    assert_eq!(err.line(), 5);
+    assert!(matches!(err.kind(), SSAErrorKind::Parse(_)))
 }

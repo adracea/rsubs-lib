@@ -231,6 +231,18 @@ impl Default for SSAEvent {
         }
     }
 }
+
+/// Parser options for SSA/ASS.
+/// - `lenient_style_bools`: if true, accept `1` as `true` in Styles
+///   (Bold/Italic/Underline/StrikeOut) in addition to spec `-1/0`.
+/// - `lenient_times`: if true, accept one to three digits after the seconds of event times,
+///   read as centiseconds like libass does (`0:00:01.100` is `0:00:02.00`).
+#[derive(Clone, Copy, Default)]
+pub struct SSAParseOptions {
+    pub lenient_style_bools: bool,
+    pub lenient_times: bool,
+}
+
 /// Contains the styles, events and info as well as a format mentioning whether it's `.ass` or `.ssa`
 #[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
 pub struct SSA {
@@ -242,13 +254,34 @@ pub struct SSA {
 }
 
 impl SSA {
-    /// Parses the given [String] into [SSA].
     pub fn parse<S: AsRef<str>>(content: S) -> Result<SSA, SSAError> {
+        Self::parse_with_options(content, SSAParseOptions::default())
+    }
+
+    pub fn parse_lenient<S: AsRef<str>>(s: S) -> Result<SSA, SSAError> {
+        Self::parse_with_options(
+            s,
+            SSAParseOptions {
+                lenient_style_bools: true,
+                lenient_times: true,
+            },
+        )
+    }
+
+    /// Parses the given [String] into [SSA].
+    pub fn parse_with_options<S: AsRef<str>>(
+        content: S,
+        opts: SSAParseOptions,
+    ) -> Result<SSA, SSAError> {
         let mut blocks = Vec::new();
         for (i, line) in (1..).zip(strip_bom(&content).lines()) {
             match line.trim() {
                 l if l.is_empty() || l.starts_with(&[';', '#']) => continue,
-                l if l.starts_with('[') => blocks.push(vec![(i, line)]),
+                // embedded font/graphic data (uuencoded, `!` to `` ` ``) may start with '[' but
+                // never contains lowercase letters, while every section name does
+                l if l.starts_with('[') && l.ends_with(']') && l.contains(char::is_lowercase) => {
+                    blocks.push(vec![(i, line)])
+                }
                 _ => {
                     if let Some(b) = blocks.last_mut() {
                         b.push((i, line))
@@ -260,7 +293,7 @@ impl SSA {
         if !blocks
             .first()
             .map(|b| &b[0])
-            .is_some_and(|l| l.1 == "[Script Info]")
+            .is_some_and(|l| l.1.trim() == "[Script Info]")
         {
             return Err(SSAError::new(SSAErrorKind::Invalid, 1));
         }
@@ -270,10 +303,10 @@ impl SSA {
         for block in blocks {
             let mut iter = block.into_iter();
             let (i, line) = iter.next().unwrap(); // safe unwrap: each block is guaranteed non-empty
-            match line {
+            match line.trim() {
                 "[Script Info]" => ssa.info = parse::parse_script_info_block(iter)?,
-                "[V4+ Styles]" => ssa.styles = parse::parse_style_block(i, iter)?,
-                "[Events]" => ssa.events = parse::parse_events_block(i, iter)?,
+                "[V4+ Styles]" => ssa.styles = parse::parse_style_block(i, iter, opts)?,
+                "[Events]" => ssa.events = parse::parse_events_block(i, iter, opts)?,
                 "[Fonts]" => ssa.fonts = parse::parse_fonts_block(iter)?,
                 "[Graphics]" => ssa.graphics = parse::parse_graphics_block(iter)?,
                 _ => continue,
@@ -456,6 +489,8 @@ mod parse {
 
     pub(super) const TIME_FORMAT: &[BorrowedFormatItem] =
         format_description!("[hour padding:none]:[minute]:[second].[subsecond digits:2]");
+    const TIME_FORMAT_NO_FRACTION: &[BorrowedFormatItem] =
+        format_description!("[hour padding:none]:[minute]:[second]");
 
     type Result<T> = std::result::Result<T, Error>;
 
@@ -548,6 +583,7 @@ mod parse {
     pub(super) fn parse_style_block<'a, I: Iterator<Item = (usize, &'a str)>>(
         header_line: usize,
         mut block_lines: I,
+        opts: SSAParseOptions,
     ) -> Result<Vec<SSAStyle>> {
         let (header_line, headers) = parse_block_header(header_line, &mut block_lines)?;
 
@@ -616,18 +652,22 @@ mod parse {
                 bold: parse_str_to_bool(
                     get_line_value(&headers, "Bold", &line_list, header_line, i)?,
                     i,
+                    opts,
                 )?,
                 italic: parse_str_to_bool(
                     get_line_value(&headers, "Italic", &line_list, header_line, i)?,
                     i,
+                    opts,
                 )?,
                 underline: parse_str_to_bool(
                     get_line_value(&headers, "Underline", &line_list, header_line, i)?,
                     i,
+                    opts,
                 )?,
                 strikeout: parse_str_to_bool(
                     get_line_value(&headers, "StrikeOut", &line_list, header_line, i)?,
                     i,
+                    opts,
                 )?,
                 scale_x: get_line_value(&headers, "ScaleX", &line_list, header_line, i)?
                     .parse()
@@ -685,6 +725,7 @@ mod parse {
     pub(super) fn parse_events_block<'a, I: Iterator<Item = (usize, &'a str)>>(
         header_line: usize,
         mut block_lines: I,
+        opts: SSAParseOptions,
     ) -> Result<Vec<SSAEvent>> {
         let (header_line, headers) = parse_block_header(header_line, &mut block_lines)?;
 
@@ -703,22 +744,16 @@ mod parse {
                 layer: get_line_value(&headers, "Layer", &line_list, header_line, i)?
                     .parse()
                     .map_err(|e| map_parse_int_err(e, i))?,
-                start: Time::parse(
+                start: parse_time(
                     get_line_value(&headers, "Start", &line_list, header_line, i)?,
-                    TIME_FORMAT,
-                )
-                .map_err(|e| Error {
-                    line: i,
-                    kind: SSAErrorKind::Parse(e.to_string()),
-                })?,
-                end: Time::parse(
+                    i,
+                    opts,
+                )?,
+                end: parse_time(
                     get_line_value(&headers, "End", &line_list, header_line, i)?,
-                    TIME_FORMAT,
-                )
-                .map_err(|e| Error {
-                    line: i,
-                    kind: SSAErrorKind::Parse(e.to_string()),
-                })?,
+                    i,
+                    opts,
+                )?,
                 style: get_line_value(&headers, "Style", &line_list, header_line, i)?.to_string(),
                 name: get_line_value(&headers, "Name", &line_list, header_line, i)?.to_string(),
                 margin_l: get_line_value(&headers, "MarginL", &line_list, header_line, i)?
@@ -749,13 +784,15 @@ mod parse {
         let mut fonts = vec![];
 
         for (i, line) in block_lines {
-            let Some(line) = line.strip_prefix("fontname:") else {
+            if let Some(name) = line.strip_prefix("fontname:") {
+                fonts.push(name.trim().to_string())
+            } else if fonts.is_empty() {
                 return Err(Error {
                     line: i,
                     kind: SSAErrorKind::Parse("fonts line must start with 'fontname:'".to_string()),
                 });
-            };
-            fonts.push(line.trim().to_string())
+            }
+            // other lines are the uuencoded data of the last font
         }
 
         Ok(fonts)
@@ -767,15 +804,17 @@ mod parse {
         let mut graphics = vec![];
 
         for (i, line) in block_lines {
-            let Some(line) = line.strip_prefix("filename:") else {
+            if let Some(name) = line.strip_prefix("filename:") {
+                graphics.push(name.trim().to_string())
+            } else if graphics.is_empty() {
                 return Err(Error {
                     line: i,
                     kind: SSAErrorKind::Parse(
                         "graphics line must start with 'filename:'".to_string(),
                     ),
                 });
-            };
-            graphics.push(line.trim().to_string())
+            }
+            // other lines are the uuencoded data of the last graphic
         }
 
         Ok(graphics)
@@ -806,10 +845,11 @@ mod parse {
             kind: SSAErrorKind::Parse(format!("no value for header '{}'", name)),
         })
     }
-    fn parse_str_to_bool(s: &str, line: usize) -> Result<bool> {
+    fn parse_str_to_bool(s: &str, line: usize, opts: SSAParseOptions) -> Result<bool> {
         match s {
             "0" => Ok(false),
             "-1" => Ok(true),
+            "1" if opts.lenient_style_bools => Ok(true),
             _ => Err(Error {
                 line,
                 kind: SSAErrorKind::Parse(
@@ -817,6 +857,35 @@ mod parse {
                 ),
             }),
         }
+    }
+    fn parse_time(s: &str, line: usize, opts: SSAParseOptions) -> Result<Time> {
+        let map_err = |e: &dyn Display| Error {
+            line,
+            kind: SSAErrorKind::Parse(e.to_string()),
+        };
+
+        if !opts.lenient_times {
+            return Time::parse(s, TIME_FORMAT).map_err(|e| map_err(&e));
+        }
+
+        let Some((hms, cs)) = s.split_once('.').filter(|(_, cs)| {
+            (1..=3).contains(&cs.len()) && cs.bytes().all(|b| b.is_ascii_digit())
+        }) else {
+            return Err(map_err(&"time fraction must have one to three digits"));
+        };
+        let hms = Time::parse(hms, TIME_FORMAT_NO_FRACTION).map_err(|e| map_err(&e))?;
+        // libass reads the fraction as a whole number of centiseconds, so `.100` carries into
+        // the seconds and `.5` is 50 ms
+        let cs: u32 = cs.parse().unwrap(); // safe unwrap: at most three ascii digits
+        let (h, m, sec) = hms.as_hms();
+        let ms = ((h as u32 * 60 + m as u32) * 60 + sec as u32) * 1000 + cs * 10;
+        Time::from_hms_milli(
+            (ms / 3_600_000) as u8,
+            (ms / 60_000 % 60) as u8,
+            (ms / 1000 % 60) as u8,
+            (ms % 1000) as u16,
+        )
+        .map_err(|e| map_err(&e))
     }
     fn map_parse_int_err(e: ParseIntError, line: usize) -> Error {
         Error {
